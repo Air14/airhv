@@ -396,8 +396,6 @@ namespace ept
 	/// <param name="source_address"> Address from which we want to jump </param>
 	void hook_write_relative_jump(unsigned __int8* target_buffer, unsigned __int64 destination_address, unsigned __int64 source_address)
 	{
-		// trampoline - target - 5
-		// 0x1000 - 2000 - 5 -0x1005
 		// destination - (source + sizeof instruction)
 		__int32 jmp_value = destination_address - (source_address + 0x5);
 
