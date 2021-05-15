@@ -8,27 +8,6 @@ struct __nt_kprocess
     ULONGLONG DirectoryTableBase;
 };
 
-typedef struct _KAPC_STATE {
-    LIST_ENTRY ApcListHead[MaximumMode];
-    struct _KPROCESS* Process;
-    union {
-        UCHAR InProgressFlags;
-        struct {
-            BOOLEAN KernelApcInProgress : 1;
-            BOOLEAN SpecialApcInProgress : 1;
-        };
-    };
-
-    BOOLEAN KernelApcPending;
-    union {
-        BOOLEAN UserApcPendingAll;
-        struct {
-            BOOLEAN SpecialUserApcPending : 1;
-            BOOLEAN UserApcPending : 1;
-        };
-    };
-} KAPC_STATE, * PKAPC_STATE, * PRKAPC_STATE;
-
 extern "C"
 {
     void NTAPI KeGenericCallDpc(_In_ PKDEFERRED_ROUTINE Routine, PVOID Context);

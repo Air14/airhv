@@ -138,7 +138,7 @@ union __cpuid_info
         } feature_information_edx;
     }cpuid_eax_01;
 
-    struct 
+    struct
     {
         union
         {

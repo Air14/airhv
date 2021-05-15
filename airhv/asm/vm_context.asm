@@ -1,6 +1,6 @@
 .CODE                                                                                                                                                                            
 extern ?vmexit_handler@@YA_NPEAU__vmexit_guest_registers@@@Z : proc
-extern ?init_logical_processor@hv@@YAXPEAX@Z : proc
+extern ?init_logical_processor@@YAXPEAX@Z : proc
 extern ?return_rsp_for_vmxoff@@YA_KXZ : proc
 extern ?return_rip_for_vmxoff@@YA_KXZ : proc
 
@@ -111,7 +111,7 @@ exit:
     SAVE_GP
     sub rsp, 020h
     mov rcx, rsp
-    call ?init_logical_processor@hv@@YAXPEAX@Z
+    call ?init_logical_processor@@YAXPEAX@Z
     int 3 ; we should never be here
 
 ?vmx_save_state@@YAXXZ ENDP

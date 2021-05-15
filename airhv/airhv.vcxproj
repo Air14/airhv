@@ -184,6 +184,7 @@
     <ClCompile Include="vmcs.cpp" />
     <ClCompile Include="vmcall_handler.cpp" />
     <ClCompile Include="vmexit_handler.cpp" />
+    <ClCompile Include="vmm.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="allocators.h" />
@@ -210,6 +211,7 @@
     <ClInclude Include="vmcall_reason.h" />
     <ClInclude Include="vmcall_handler.h" />
     <ClInclude Include="vmexit_handler.h" />
+    <ClInclude Include="vmm.h" />
   </ItemGroup>
   <ItemGroup>
     <MASM Include="asm\vm_context.asm" />

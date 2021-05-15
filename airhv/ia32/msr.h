@@ -41,13 +41,12 @@
 
 union __msr
 {
+    unsigned __int64 all;
     struct
     {
         unsigned __int32 low;
         unsigned __int32 high;
     };
-
-    unsigned __int64 all;
 };
 
 union __ia32_efer_t

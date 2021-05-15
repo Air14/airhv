@@ -1,10 +1,11 @@
-#pragma warning( disable : 4201 4100 4101 4244 4333 4245 4366 4805)
+#pragma warning( disable : 4201 4805)
 #include <ntddk.h>
 #include <intrin.h>
 #include "log.h"
 #include "ntapi.h"
 #include "hypervisor_routines.h"
 #include "hypervisor_gateway.h"
+#include "vmm.h"
 
 #define IOCTL_POOL_MANAGER_ALLOCATE CTL_CODE(FILE_DEVICE_UNKNOWN, 0x900, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
 
@@ -23,7 +24,7 @@ __vmm_context* g_vmm_context = 0;
 	 }
 
 	 hv::disable_vmx_operation();
-	 hv::free_memory();
+	 free_vmm_context();
 
 	 RtlInitUnicodeString(&dos_device_name, L"\\DosDevices\\airhv");
 	 IoDeleteSymbolicLink(&dos_device_name);
@@ -105,10 +106,10 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object, PCUNICODE_STRING reg)
 	// Initialize and start virtual machine
 	// If it fails turn off vmx and deallocate all structures
 	//
-	if(hv::vmm_init() == false)
+	if(vmm_init() == false)
 	{
 		hv::disable_vmx_operation();
-		hv::free_memory();
+		free_vmm_context();
 		LogError("Vmm initialization failed");
 		return STATUS_FAILED_DRIVER_ENTRY;
 	}

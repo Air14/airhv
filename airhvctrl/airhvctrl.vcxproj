@@ -151,6 +151,7 @@
     <ClCompile Include="hypervisor_gateway.cpp" />
     <ClCompile Include="log.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="utils.cpp" />
   </ItemGroup>
   <ItemGroup>
     <MASM Include="vmintrin.asm" />
@@ -158,6 +159,8 @@
   <ItemGroup>
     <ClInclude Include="hypervisor_gateway.h" />
     <ClInclude Include="log.h" />
+    <ClInclude Include="nt.h" />
+    <ClInclude Include="utils.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

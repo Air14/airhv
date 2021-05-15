@@ -1,24 +1,19 @@
-#pragma warning( disable : 4201 4100 4101 4244 4333 4245 4366)
-
 #include <ntddk.h>
 #include <intrin.h>
 #include "hypervisor_gateway.h"
+#include "utils.h"
 
-void* NtCreateFileAddress;
+extern void* kernel_code_caves[200];
 
-extern "C"
-NTSTATUS(NtCreateFile)(PHANDLE FileHandle, ACCESS_MASK DesiredAccess, POBJECT_ATTRIBUTES ObjectAttributes,
+void* nt_create_file_address;
+
+NTSTATUS(*original_nt_create_file)(PHANDLE FileHandle, ACCESS_MASK DesiredAccess, POBJECT_ATTRIBUTES ObjectAttributes,
 	PIO_STATUS_BLOCK IoStatusBlock, PLARGE_INTEGER AllocationSize, ULONG FileAttributes,
 	ULONG ShareAccess, ULONG CreateDisposition, ULONG CreateOptions, PVOID EaBuffer, ULONG EaLength
 	);
 
-NTSTATUS(*OriginalNtCreateFile)(PHANDLE FileHandle, ACCESS_MASK DesiredAccess, POBJECT_ATTRIBUTES ObjectAttributes,
-	PIO_STATUS_BLOCK IoStatusBlock, PLARGE_INTEGER AllocationSize, ULONG FileAttributes,
-	ULONG ShareAccess, ULONG CreateDisposition, ULONG CreateOptions, PVOID EaBuffer, ULONG EaLength
-	);
 
-
-NTSTATUS NTAPI HookNtCreateFile(
+NTSTATUS NTAPI hooked_nt_create_file(
 	PHANDLE            FileHandle,
 	ACCESS_MASK        DesiredAccess,
 	POBJECT_ATTRIBUTES ObjectAttributes,
@@ -47,15 +42,15 @@ NTSTATUS NTAPI HookNtCreateFile(
 	{
 
 	}
-	return OriginalNtCreateFile(FileHandle, DesiredAccess, ObjectAttributes, IoStatusBlock, AllocationSize, FileAttributes, ShareAccess, CreateDisposition, CreateOptions, EaBuffer, EaLength);
+	return original_nt_create_file(FileHandle, DesiredAccess, ObjectAttributes, IoStatusBlock, AllocationSize, FileAttributes, ShareAccess, CreateDisposition, CreateOptions, EaBuffer, EaLength);
 }
-
 
 VOID driver_unload(PDRIVER_OBJECT driver_object)
 {
 	UNICODE_STRING dos_device_name;
 
-	hvgt::ept_unhook(MmGetPhysicalAddress(NtCreateFileAddress).QuadPart);
+	hvgt::unhook_function(nt_create_file_address);
+	hvgt::dump_pool_manager();
 
 	RtlInitUnicodeString(&dos_device_name, L"\\DosDevices\\airhvctrl");
 	IoDeleteSymbolicLink(&dos_device_name);
@@ -116,10 +111,20 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object, PCUNICODE_STRING reg)
 	UNICODE_STRING routine_name;
 	RtlInitUnicodeString(&routine_name,L"NtCreateFile");
 
-	NtCreateFileAddress = MmGetSystemRoutineAddress(&routine_name);
+	// Find code caves in ntoskrnl.exe
+	find_code_caves();
 
-	hvgt::hook_function(NtCreateFileAddress, HookNtCreateFile, (void**)&OriginalNtCreateFile);
+	// Get address of NtCreateFile syscall
+	nt_create_file_address = MmGetSystemRoutineAddress(&routine_name);
+
+	// 14 bytes hook using absolute jmp
+	//hvgt::hook_function(nt_create_file_address, hooked_nt_create_file, (void**)&original_nt_create_file);
+
+	// 5 bytes hook using relative jmp and code cave
+	hvgt::hook_function(nt_create_file_address, hooked_nt_create_file, kernel_code_caves[0], (void**)&original_nt_create_file);
+
+	// Send information to hypervisor to allocate new pools
 	hvgt::send_irp_perform_allocation();
-
+	
 	return status;
 }

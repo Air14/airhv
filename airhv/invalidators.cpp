@@ -1,4 +1,4 @@
-#pragma warning( disable : 4201 4100 4101 4244 4333 4245 4366)
+#pragma warning( disable : 4201)
 #include "invalidators.h"
 #include "asm\vm_intrin.h"
 

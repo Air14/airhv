@@ -11,11 +11,8 @@ struct __invpcid_descriptor
 {
 	union
 	{
-		struct
-		{
-			unsigned __int64 pcid : 12;
-			unsigned __int64 reserved : 52;
-		};
+		unsigned __int64 pcid : 12;
+		unsigned __int64 reserved : 52;
 	};
 
 	unsigned __int64 linear_address;
@@ -25,11 +22,8 @@ struct __invvpid_descriptor
 {
 	union
 	{
-		struct
-		{
-			unsigned __int64 vpid : 16;
-			unsigned __int64 reserved : 48;
-		};
+		unsigned __int64 vpid : 16;
+		unsigned __int64 reserved : 48;
 	};
 
 	unsigned __int64 linear_address;

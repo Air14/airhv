@@ -1,4 +1,4 @@
-#pragma warning( disable : 4201 4100 4101 4244 4333 4245 4366 4309 4189 26451 4065)
+#pragma warning( disable : 4201 4244 4065)
 
 #include <ntddk.h>
 #include <intrin.h>
@@ -176,19 +176,17 @@ void vmexit_msr_write_handler(__vcpu* vcpu)
 /// <param name="guest_registers"></param>
 void vmexit_ept_violation_handler(__vcpu* vcpu)
 {
-	PLIST_ENTRY current;
 	__ept_violation ept_violation;
-	unsigned __int64 guest_physical_adddress;
 
 	ept_violation.all = vcpu->vmexit_info.qualification;
-	guest_physical_adddress = hv::vmread(GUEST_PHYSICAL_ADDRESS);
+	unsigned __int64 guest_physical_adddress = hv::vmread(GUEST_PHYSICAL_ADDRESS);
 
-	current = &g_vmm_context->ept_state->hooked_page_list;
+	PLIST_ENTRY current = &g_vmm_context->ept_state->hooked_page_list;
 	while (&g_vmm_context->ept_state->hooked_page_list != current->Flink)
 	{
 		current = current->Flink;
 		__ept_hooked_page_info* hooked_entry = CONTAINING_RECORD(current, __ept_hooked_page_info, hooked_page_list);
-		if (hooked_entry->physical_base_address == GET_PFN(guest_physical_adddress))
+		if (hooked_entry->physical_frame_number == GET_PFN(guest_physical_adddress))
 		{
 			if (ept_violation.read_access || ept_violation.write_access) 
 			{
@@ -210,18 +208,15 @@ void vmexit_ept_violation_handler(__vcpu* vcpu)
 void vmexit_handle_exception(__vcpu* vcpu)
 {
 	__vmexit_interrupt_info interrupt_info;
-	unsigned __int64 linear_address;
-	unsigned __int32 error_code;
-
 	interrupt_info.all = hv::vmread(VM_EXIT_INTERRUPTION_INFORMATION);
 
-	error_code = hv::vmread(CONTROL_VM_ENTRY_EXCEPTION_ERROR_CODE);
+	unsigned __int32 error_code = hv::vmread(CONTROL_VM_ENTRY_EXCEPTION_ERROR_CODE);
 
 	// Page fault it treated not like any other exception
 	// Exit Qualification contain the linear address which caused page fault
 	if (interrupt_info.vector == EXCEPTION_VECTOR_PAGE_FAULT)
 	{
-		linear_address = vcpu->vmexit_info.qualification;
+		unsigned __int64 linear_address = vcpu->vmexit_info.qualification;
 		__writecr2(linear_address);
 	}
 
@@ -281,14 +276,10 @@ void vmexit_invpcid_handler(__vcpu* vcpu)
 {
 	__vmexit_instruction_information2 instruction_information;
 	__invpcid_descriptor descriptor;
-	unsigned __int64 old_cr3;
-	unsigned __int64 guest_address;
-	unsigned __int64* invpcid_type;
-	void* descriptor_address;
 
 	instruction_information.all = vcpu->vmexit_info.instruction_information;
 
-	invpcid_type = &vcpu->vmexit_info.guest_registers->rax - instruction_information.index_reg;
+	unsigned __int64* invpcid_type = &vcpu->vmexit_info.guest_registers->rax - instruction_information.index_reg;
 
 	if (*invpcid_type > 3) 
 	{
@@ -296,9 +287,9 @@ void vmexit_invpcid_handler(__vcpu* vcpu)
 		return;
 	}
 
-	guest_address = hv::get_guest_address(vcpu);
+	unsigned __int64 guest_address = hv::get_guest_address(vcpu);
 
-	old_cr3 = hv::swap_context();
+	unsigned __int64 old_cr3 = hv::swap_context();
 
 	if (MmGetPhysicalAddress((void*)guest_address).QuadPart == 0) 
 	{
@@ -347,12 +338,6 @@ void vmexit_mov_dr_handler(__vcpu* vcpu)
 	// for a detailed description of the flags and fields in the debug registers.)
 	//
 
-	unsigned __int64* gp_register;
-	__exit_qualification_dr operation;
-	__cr4 cr4;
-	__dr7 dr7;
-	__dr6 dr6;
-
 	//
 	// Accessing dr registers from non ring 0 is forbidden
 	// and cause #GP exception
@@ -363,8 +348,9 @@ void vmexit_mov_dr_handler(__vcpu* vcpu)
 		return;
 	}
 
+	__exit_qualification_dr operation;
 	operation.all = vcpu->vmexit_info.qualification;
-	gp_register = &vcpu->vmexit_info.guest_registers->rax - operation.gp_register;
+	unsigned __int64* gp_register = &vcpu->vmexit_info.guest_registers->rax - operation.gp_register;
 
 	//
 	// Accessing dr register 4 or 5 when debugging extension in cr4 is on cause #UD exception
@@ -372,6 +358,7 @@ void vmexit_mov_dr_handler(__vcpu* vcpu)
 	//
 	if (operation.debug_register_number == 4 || operation.debug_register_number == 5) 
 	{
+		__cr4 cr4;
 		cr4.all = hv::vmread(GUEST_CR4);
 
 		if (cr4.debugging_extensions == true) 
@@ -395,9 +382,11 @@ void vmexit_mov_dr_handler(__vcpu* vcpu)
 	//
 	// While dr7 bit general detect is set any access to any dr register cause #DB exception
 	//
+	__dr7 dr7;
 	dr7.all = hv::vmread(GUEST_DR7);
 	if (dr7.general_detect == 1) 
 	{
+		__dr6 dr6;
 		dr6.all = __readdr(6);
 		dr6.breakpoint_condition = 0;
 		dr6.debug_register_access_detected = 1;
@@ -490,8 +479,6 @@ void vmexit_io(__vcpu* vcpu)
 {
 	__exit_qualification_io io_information;
 	__rflags rflags;
-	unsigned __int64 physcial_address;
-	unsigned __int32 count;
 
 	rflags.all = vcpu->vmexit_info.guest_rflags;
 	io_information.all = vcpu->vmexit_info.qualification;
@@ -515,7 +502,7 @@ void vmexit_io(__vcpu* vcpu)
 	else 
 	{
 		port_value.qword = io_information.direction == 0 ? vcpu->vmexit_info.guest_registers->rsi : vcpu->vmexit_info.guest_registers->rdi;
-		physcial_address = MmGetPhysicalAddress((void*)port_value.qword).QuadPart;
+		unsigned __int64 physcial_address = MmGetPhysicalAddress((void*)port_value.qword).QuadPart;
 
 		if (physcial_address == 0)
 		{
@@ -524,7 +511,7 @@ void vmexit_io(__vcpu* vcpu)
 		}
 	}
 
-	count = io_information.rep == 0 ? 1 : MASK_GET_LOWER_32BITS(vcpu->vmexit_info.guest_registers->rax);
+	unsigned __int32 count = io_information.rep == 0 ? 1 : MASK_GET_LOWER_32BITS(vcpu->vmexit_info.guest_registers->rax);
 
 	// OUT
 	if (io_information.direction == 0)
@@ -656,11 +643,10 @@ void vmexit_rdrand_handler(__vcpu* vcpu)
 {
 	__rflags rflags;
 	__vmexit_instruction_information5 instruction_information;
-	unsigned __int64* register_pointer;
 
 	instruction_information.all = vcpu->vmexit_info.instruction_information;
 
-	register_pointer = &vcpu->vmexit_info.guest_registers->rax - instruction_information.operand_register;
+	unsigned __int64* register_pointer = &vcpu->vmexit_info.guest_registers->rax - instruction_information.operand_register;
 
 	rflags.all = vcpu->vmexit_info.guest_rflags;
 
@@ -709,11 +695,10 @@ void vmexit_rdseed_handler(__vcpu* vcpu)
 {
 	__rflags rflags;
 	__vmexit_instruction_information5 instruction_information;
-	unsigned __int64* register_pointer;
 	
 	instruction_information.all = vcpu->vmexit_info.instruction_information;
 
-	register_pointer = &vcpu->vmexit_info.guest_registers->rax - instruction_information.operand_register;
+	unsigned __int64*  register_pointer = &vcpu->vmexit_info.guest_registers->rax - instruction_information.operand_register;
 
 	rflags.all = vcpu->vmexit_info.guest_rflags;
 
@@ -762,9 +747,6 @@ void vmexit_rdseed_handler(__vcpu* vcpu)
 /// <param name="guest_registers"></param>
 void vmexit_failed(__vcpu* vcpu)
 {
-	unsigned __int64 exit_reason = hv::vmread(EXIT_REASON);
-	unsigned __int64 exit_qualification = hv::vmread(EXIT_QUALIFICATION);
-
 	ASSERT(FALSE);
 	hv::dump_vmcs();
 	KeBugCheckEx(HYPERVISOR_ERROR, 1, vcpu->vmexit_info.reason, vcpu->vmexit_info.qualification, 0);
@@ -776,11 +758,10 @@ void vmexit_failed(__vcpu* vcpu)
 /// <param name="guest_registers"></param>
 void vmexit_xsetbv_handler(__vcpu* vcpu)
 {
-	unsigned __int64 xcr_number;
 	__xcr0 new_xcr0;
 	__xcr0 current_xcr0;
 
-	xcr_number = vcpu->vmexit_info.guest_registers->rcx;
+	unsigned __int64 xcr_number = vcpu->vmexit_info.guest_registers->rcx;
 
 	new_xcr0.all = vcpu->vmexit_info.guest_registers->rdx << 32 | MASK_GET_LOWER_32BITS(vcpu->vmexit_info.guest_registers->rax);
 
@@ -851,9 +832,6 @@ void vmexit_invd_handler(__vcpu* vcpu)
 /// <param name="guest_registers"></param>
 void vmexit_rdtscp_handler(__vcpu* vcpu)
 {
-	unsigned __int32 processor_id;
-	unsigned __int64 tsc;
-
 	//
 	// Reads the current value of the processor’s time-stamp counter (a 64-bit MSR) into the EDX:EAX registers
 	// and also reads the value of the IA32_TSC_AUX MSR (address C0000103H) into the ECX register.
@@ -862,7 +840,9 @@ void vmexit_rdtscp_handler(__vcpu* vcpu)
 	// and the ECX register is loaded with the low-order 32-bits of IA32_TSC_AUX MSR.
 	// On processors that support the Intel 64 architecture, the high-order 32 bits of each of RAX, RDX, and RCX are cleared.
 	//
-	tsc = __rdtscp(&processor_id);
+
+	unsigned __int32 processor_id;
+	unsigned __int64 tsc = __rdtscp(&processor_id);
 	vcpu->vmexit_info.guest_registers->rcx = processor_id;
 	vcpu->vmexit_info.guest_registers->rdx = MASK_GET_HIGHER_32BITS(tsc) >> 32;
 	vcpu->vmexit_info.guest_registers->rax = MASK_GET_LOWER_32BITS(tsc);
@@ -876,7 +856,6 @@ void vmexit_rdtscp_handler(__vcpu* vcpu)
 /// <param name="guest_registers"></param>
 void vmexit_monitor_trap_flag(__vcpu* vcpu)
 {
-
 	if (vcpu->ept_hook_restore_point)
 	{
 		__ept_hooked_page_info* hooked_page_info = vcpu->ept_hook_restore_point;
@@ -909,6 +888,7 @@ void vmexit_unimplemented(__vcpu* vcpu)
 /// <param name="guest_registers"></param>
 void vmexit_vm_instruction(__vcpu* vcpu)
 {
+	UNREFERENCED_PARAMETER(vcpu);
 	hv::inject_event(EXCEPTION_VECTOR_UNDEFINED_OPCODE, INTERRUPT_TYPE_HARDWARE_EXCEPTION, 0, 1);
 }
 
@@ -921,6 +901,7 @@ void vmexit_triple_fault_handler(__vcpu* vcpu)
 	//
 	// Dump whole vmcs state before hard reset
 	//
+	UNREFERENCED_PARAMETER(vcpu);
 	ASSERT(FALSE);
 	hv::dump_vmcs();
 	hv::hard_reset();
@@ -932,8 +913,6 @@ void vmexit_triple_fault_handler(__vcpu* vcpu)
 /// <param name="guest_registers"></param>
 void vmexit_rdtsc_handler(__vcpu* vcpu) 
 {
-	unsigned __int64 tsc;
-
 	//
 	// Loads the current value of the processor's time-stamp counter into the EDX:EAX registers.
 	// The time-stamp counter is contained in a 64-bit MSR.
@@ -942,7 +921,7 @@ void vmexit_rdtsc_handler(__vcpu* vcpu)
 	// See "Time Stamp Counter" in Chapter 15 of the IA-32 Intel Architecture Software Developer's Manual, 
 	// Volume 3 for specific details of the time stamp counter behavior.
 	//
-	tsc = __rdtsc();
+	unsigned __int64 tsc = __rdtsc();
 
 	vcpu->vmexit_info.guest_registers->rdx = MASK_GET_HIGHER_32BITS(tsc) >> 32;
 	vcpu->vmexit_info.guest_registers->rax = MASK_GET_LOWER_32BITS(tsc);

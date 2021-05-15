@@ -1,4 +1,4 @@
-#pragma warning( disable : 4201 4100 4101 4244 4333 4245 4366 26451)
+#pragma warning( disable : 4201 4244)
 #include <intrin.h>
 #include "ia32\segment.h"
 #include "common.h"
@@ -565,12 +565,11 @@ void set_exception_bitmap(__exception_bitmap& exception_bitmap)
 /// <returns></returns>
 unsigned __int64 get_segment_base(unsigned __int16 selector, unsigned __int8* gdt_base)
 {
-	unsigned __int64 segment_base;
 	__segment_descriptor* segment_descriptor;
 
 	segment_descriptor = (__segment_descriptor*)(gdt_base + (selector & ~0x7));
 
-	segment_base = segment_descriptor->base_low | segment_descriptor->base_middle << 16 | segment_descriptor->base_high << 24;
+	unsigned __int64 segment_base = segment_descriptor->base_low | segment_descriptor->base_middle << 16 | segment_descriptor->base_high << 24;
 
 	if (segment_descriptor->descriptor_type == false)
 		segment_base = (segment_base & MASK_32BITS) | (unsigned __int64)segment_descriptor->base_upper << 32;
@@ -588,17 +587,15 @@ void fill_guest_selector_data(void* gdt_base, unsigned __int32 segment_register,
 {
 	__segment_access_rights segment_access_rights;
 	__segment_descriptor* segment_descriptor;
-	unsigned __int64 segment_base;
-	unsigned __int32 segment_limit;
 
 	if (selector & 0x4)
 		return;
 
 	segment_descriptor = (__segment_descriptor*)((unsigned __int8*)gdt_base + (selector & ~0x7));
 
-	segment_base = segment_descriptor->base_low | segment_descriptor->base_middle << 16 | segment_descriptor->base_high << 24;
+	unsigned __int64 segment_base = segment_descriptor->base_low | segment_descriptor->base_middle << 16 | segment_descriptor->base_high << 24;
 
-	segment_limit = segment_descriptor->limit_low | (segment_descriptor->segment_limit_high << 16);
+	unsigned __int32 segment_limit = segment_descriptor->limit_low | (segment_descriptor->segment_limit_high << 16);
 
 	//
 	// Load ar get access rights of descriptor specified by selector

@@ -212,7 +212,7 @@ union __vmexit_instruction_information7
 union __exit_qualification_io 
 {
 	unsigned __int64 all;
-	struct 
+	struct
 	{
 		//
 		// 0 = 1 - byte

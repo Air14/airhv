@@ -1,4 +1,4 @@
-#pragma warning( disable : 4201 4100 4101 4244 4333 4245 4366 4805 4189)
+#pragma warning( disable : 4201 4244 4805 4189)
 
 #include <intrin.h>
 #include "common.h"
@@ -82,13 +82,11 @@ void vmexit_vmcall_handler(__vcpu* vcpu)
 			break;
 		}
 
-		case VMCALL_EPT_HOOK_PAGE:
+		case VMCALL_EPT_HOOK_FUNCTION:
 		{
-			unsigned __int64 old_cr3;
+			 unsigned __int64 old_cr3 = hv::swap_context();
 
-			old_cr3 = hv::swap_context();
-
-			ept::hook_page((void*)vmcall_parameter1, (void*)vmcall_parameter2, (void**)vmcall_parameter3, vmcall_parameter4);
+			ept::hook_function((void*)vmcall_parameter1, (void*)vmcall_parameter2, (void*)vmcall_parameter3, (void**)vmcall_parameter4);
 
 			hv::restore_context(old_cr3);
 
@@ -96,19 +94,23 @@ void vmexit_vmcall_handler(__vcpu* vcpu)
 			break;
 		}
 
-		case VMCALL_EPT_UNHOOK_PAGE:
+		case VMCALL_EPT_UNHOOK_FUNCTION:
 		{
+			unsigned __int64 old_cr3 = hv::swap_context();
+
 			// If set unhook all pages
 			if (vmcall_parameter1 == true)
 			{
-				ept::unhook_all_pages();
+				ept::unhook_all_functions();
 			}
 
 			else
 			{
 				// Page physciall address
-				status = ept::unhook_page(vmcall_parameter2);
+				status = ept::unhook_function(vmcall_parameter2);
 			}
+
+			hv::restore_context(old_cr3);
 
 			adjust_rip(vcpu);
 			break;
@@ -127,6 +129,20 @@ void vmexit_vmcall_handler(__vcpu* vcpu)
 				invept_single_context(g_vmm_context->ept_state->ept_pointer->all);
 			}
 
+			adjust_rip(vcpu);
+			break;
+		}
+
+		case VMCALL_DUMP_POOL_MANAGER:
+		{
+			pool_manager::dump_pools_info();
+			adjust_rip(vcpu);
+			break;
+		}
+
+		case VMCALL_DUMP_VMCS_STATE:
+		{
+			hv::dump_vmcs();
 			adjust_rip(vcpu);
 			break;
 		}

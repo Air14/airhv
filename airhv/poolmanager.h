@@ -9,6 +9,7 @@ namespace pool_manager
         INTENTION_TRACK_HOOKED_PAGES,
         INTENTION_EXEC_TRAMPOLINE,
         INTENTION_SPLIT_PML2,
+        INTENTION_TRACK_HOOKED_FUNCTIONS
     };
 
     struct __request_new_allocation
@@ -34,7 +35,6 @@ namespace pool_manager
         allocation_intention intention;
         LIST_ENTRY pool_list;
         bool is_busy;
-        bool should_be_refreshed;
         bool recycled;
     };
 
@@ -64,18 +64,7 @@ namespace pool_manager
     void uninitialize();
 
     /// <summary>
-    /// Zero already allocated memory pools which are marked as "should be refreshed"
-    /// </summary>
-    void refresh_pool();
-
-    /// <summary>
-    /// Set pool property "should be refreshed"
-    /// </summary>
-    /// <param name="address">Address of pool which has to be marked as refreshed</param>
-    void set_refresh(void* address);
-
-    /// <summary>
-    /// Set information that pool is no longer used by anyone
+    /// Set information that pool is no longer used by anyone and mark as recycled
     /// </summary>
     /// <param name="address"></param>
     void release_pool(void* address);

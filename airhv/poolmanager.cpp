@@ -1,4 +1,4 @@
-#pragma warning( disable : 4201 4100 4101 4244 4333 4245 4366)
+#pragma warning( disable : 4201)
 #include <intrin.h>
 #include "poolmanager.h"
 #include "common.h"
@@ -36,7 +36,6 @@ namespace pool_manager
 
             single_pool->intention = intention;
             single_pool->is_busy = false;
-            single_pool->should_be_refreshed = false;
             single_pool->size = size;
 
             InsertTailList(g_vmm_context->pool_manager->list_of_allocated_pools, &(single_pool->pool_list));
@@ -148,19 +147,25 @@ namespace pool_manager
 
         InitializeListHead(g_vmm_context->pool_manager->list_of_allocated_pools);
 
-        if (request_allocation(sizeof(__ept_dynamic_split), 10, INTENTION_SPLIT_PML2) == false)
+        if (request_allocation(sizeof(__ept_dynamic_split), 100, INTENTION_SPLIT_PML2) == false)
         {
             LogError("Pool mangaer request allocation Failed");
             return false;
         }
 
-        if (request_allocation(sizeof(__ept_hooked_page_info), 10, INTENTION_TRACK_HOOKED_PAGES) == false)
+        if (request_allocation(sizeof(__ept_hooked_page_info), 100, INTENTION_TRACK_HOOKED_PAGES) == false)
         {
             LogError("Pool mangaer request allocation Failed");
             return false;
         }
 
-        if (request_allocation(100, 10, INTENTION_EXEC_TRAMPOLINE) == false)
+        if (request_allocation(100, 100, INTENTION_EXEC_TRAMPOLINE) == false)
+        {
+            LogError("Pool mangaer request allocation Failed");
+            return false;
+        }
+
+        if (request_allocation(sizeof(__ept_hooked_function_info), 100, INTENTION_TRACK_HOOKED_FUNCTIONS) == false)
         {
             LogError("Pool mangaer request allocation Failed");
             return false;
@@ -203,64 +208,7 @@ namespace pool_manager
     }
 
     /// <summary>
-    /// Set pool property "should be refreshed"
-    /// </summary>
-    /// <param name="address">Address of pool which has to be marked as refreshed</param>
-    void set_refresh(void* address)
-    {
-        PLIST_ENTRY current = 0;
-        current = g_vmm_context->pool_manager->list_of_allocated_pools;
-
-        spinlock::lock(&g_vmm_context->pool_manager->lock_for_reading_pool);
-        while (g_vmm_context->pool_manager->list_of_allocated_pools != current->Flink)
-        {
-            current = current->Flink;
-
-            // Get the head of the record
-            __pool_table* pool_table = (__pool_table*)CONTAINING_RECORD(current, __pool_table, pool_list);
-
-            if (address == pool_table->address)
-            {
-                pool_table->should_be_refreshed = true;
-                break;
-            }
-        }
-
-        spinlock::unlock(&g_vmm_context->pool_manager->lock_for_reading_pool);
-    }
-
-    /// <summary>
-    /// Zero already allocated memory pools which are marked as "should be refreshed"
-    /// </summary>
-    void refresh_pool()
-    {
-        PLIST_ENTRY current = 0;
-        current = g_vmm_context->pool_manager->list_of_allocated_pools;
-
-        spinlock::lock(&g_vmm_context->pool_manager->lock_for_reading_pool);
-        while (g_vmm_context->pool_manager->list_of_allocated_pools != current->Flink)
-        {
-            current = current->Flink;
-
-            // Get the head of the record
-            __pool_table* pool_table = (__pool_table*)CONTAINING_RECORD(current, __pool_table, pool_list);
-
-            if (pool_table->should_be_refreshed == true)
-            {
-                RtlSecureZeroMemory(pool_table->address, pool_table->size);
-                pool_table->is_busy = false;
-                pool_table->should_be_refreshed = false;
-
-                // Indicates that this pool was previously used and it isn't fresh allocated
-                pool_table->recycled = true;
-            }
-        }
-
-        spinlock::unlock(&g_vmm_context->pool_manager->lock_for_reading_pool);
-    }
-
-    /// <summary>
-    /// Set information that pool is no longer used by anyone
+    /// Set information that pool is no longer used anymore
     /// </summary>
     /// <param name="address"></param>
     void release_pool(void* address)
@@ -278,7 +226,9 @@ namespace pool_manager
 
             if (address == pool_table->address)
             {
+                RtlSecureZeroMemory(address, pool_table->size);
                 pool_table->is_busy = false;
+                pool_table->recycled = true;
                 break;
             }
         }
@@ -294,6 +244,7 @@ namespace pool_manager
         case INTENTION_TRACK_HOOKED_PAGES:   return "Track Hooked Pages";
         case INTENTION_EXEC_TRAMPOLINE: return "Trampoline";
         case INTENTION_SPLIT_PML2: return "Split Pml2";
+        case INTENTION_TRACK_HOOKED_FUNCTIONS: return "Trace Hooked Functions";
         default:      return "Unknown";
         }
     }
@@ -303,8 +254,7 @@ namespace pool_manager
     /// </summary>
     void dump_pools_info()
     {
-        PLIST_ENTRY current = 0;
-        current = g_vmm_context->pool_manager->list_of_allocated_pools;
+        PLIST_ENTRY current = g_vmm_context->pool_manager->list_of_allocated_pools;
 
         spinlock::lock(&g_vmm_context->pool_manager->lock_for_reading_pool);
 
@@ -317,9 +267,9 @@ namespace pool_manager
             // Get the head of the record
             __pool_table* pool_table = (__pool_table*)CONTAINING_RECORD(current, __pool_table, pool_list);
 
-            LogDump("Address: 0x%X    Size: %llu    Intention: %s    Is Busy: %s    Should be refreshed: %s    Recycled: %s",
+            LogDump("Address: 0x%X    Size: %llu    Intention: %s    Is Busy: %s    Recycled: %s",
                 pool_table->address, pool_table->size, intention_to_string(pool_table->intention), pool_table->is_busy ? "Yes" : "No",
-                pool_table->should_be_refreshed ? "Yes" : "No", pool_table->recycled ? "Yes" : "No");
+                pool_table->recycled ? "Yes" : "No");
         }
 
         DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL, "-----------------------------------POOL MANAGER DUMP-----------------------------------\r\n");

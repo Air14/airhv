@@ -1,5 +1,3 @@
-#pragma warning( disable : 4201 4100 4101 4244 4333 4245 4366)
-
 #include <ntddk.h>
 #include "log.h"
 
@@ -21,13 +19,18 @@ enum vm_call_reasons
 	VMCALL_EPT_HOOK_PAGE,
 	VMCALL_EPT_UNHOOK_PAGE,
 	VMCALL_UNHOOK_ALL_PAGES,
-	VMCALL_INVEPT_CONTEXT
+	VMCALL_INVEPT_CONTEXT,
+	VMCALL_DUMP_POOL_MANAGER,
+	VMCALL_DUMP_VMCS_STATE
 };
 
 namespace hvgt
 {
 	void broadcast_vmoff(KDPC* Dpc, PVOID DeferredContext, PVOID SystemArgument1, PVOID SystemArgument2)
 	{
+		UNREFERENCED_PARAMETER(Dpc);
+		UNREFERENCED_PARAMETER(DeferredContext);
+
 		__vm_call(VMCALL_VMXOFF, 0, 0, 0);
 		KeSignalCallDpcSynchronize(SystemArgument2);
 		KeSignalCallDpcDone(SystemArgument1);
@@ -35,6 +38,9 @@ namespace hvgt
 
 	void broadcast_invept_all_contexts(KDPC* Dpc, PVOID DeferredContext, PVOID SystemArgument1, PVOID SystemArgument2)
 	{
+		UNREFERENCED_PARAMETER(Dpc);
+		UNREFERENCED_PARAMETER(DeferredContext);
+		
 		__vm_call(VMCALL_INVEPT_CONTEXT, true, 0, 0);
 		KeSignalCallDpcSynchronize(SystemArgument2);
 		KeSignalCallDpcDone(SystemArgument1);
@@ -42,6 +48,9 @@ namespace hvgt
 
 	void broadcast_invept_single_context(KDPC* Dpc, PVOID DeferredContext, PVOID SystemArgument1, PVOID SystemArgument2)
 	{
+		UNREFERENCED_PARAMETER(Dpc);
+		UNREFERENCED_PARAMETER(DeferredContext);
+
 		__vm_call(VMCALL_INVEPT_CONTEXT, false, 0, 0);
 		KeSignalCallDpcSynchronize(SystemArgument2);
 		KeSignalCallDpcDone(SystemArgument1);
@@ -70,7 +79,7 @@ namespace hvgt
 	/// Unhook all pages and invalidate tlb
 	/// </summary>
 	/// <returns> status </returns>
-	bool ept_unhook()
+	bool unhook_all_functions()
 	{
 		bool status = __vm_call(VMCALL_EPT_UNHOOK_PAGE, true, 0, 0);
 		invept(false);
@@ -82,27 +91,26 @@ namespace hvgt
 	/// </summary>
 	/// <param name="page_physcial_address"></param>
 	/// <returns> status </returns>
-	bool ept_unhook(unsigned __int64 page_physcial_address)
+	bool unhook_function(void* function_address)
 	{
-		bool status = __vm_call(VMCALL_EPT_UNHOOK_PAGE, false, page_physcial_address, 0);
+		bool status = __vm_call(VMCALL_EPT_UNHOOK_PAGE, false, (unsigned __int64)function_address, 0);
 		invept(false);
 		return status;
 	}
 
+
 	/// <summary>
-	/// Hook some page via ept and invalidates mappings
+	/// Hook function via ept and invalidates mappings
 	/// </summary>
 	/// <param name="target_address">Address of function which we want to hook</param>
-	/// <param name="hook_function">Address of hook function</param>
+	/// <param name="hook_function">Address of function which is used to call original function</param>
+	/// <param name="trampoline_address">Address of codecave which is at least 14 bytes in size and in 2GB range of target function address
+	/// Use only if function you want to hook uses some relatives jmps/moves in first 14 bytes</param>
 	/// <param name="origin_function">Address of function which is used to call original function</param>
-	/// <param name="read">If set ept violation will not occur on read access</param>
-	/// <param name="write">If set ept violation will not occur on write access</param>
-	/// <param name="execute">If set ept violation will not occur on execute access</param>
 	/// <returns> status </returns>
-	bool hook_page(void* target_address, void* hook_function, void** origin_function, bool read, bool write, bool execute)
+	bool hook_function(void* target_address, void* hook_function, void* trampoline_address, void** origin_function)
 	{
-		unsigned __int8 protection_mask = read + (write << 1) + (execute << 2);
-		bool status = __vm_call_ex(VMCALL_EPT_HOOK_PAGE, (unsigned __int64)target_address, (unsigned __int64)hook_function, (unsigned __int64)origin_function, protection_mask, 0, 0, 0, 0, 0);
+		bool status = __vm_call_ex(VMCALL_EPT_HOOK_PAGE, (unsigned __int64)target_address, (unsigned __int64)hook_function, (unsigned __int64)trampoline_address, (unsigned __int64)origin_function, 0, 0, 0, 0, 0);
 		invept(false);
 
 		return status;
@@ -117,11 +125,18 @@ namespace hvgt
 	/// <returns> status </returns>
 	bool hook_function(void* target_address, void* hook_function, void** origin_function)
 	{
-		unsigned __int8 protection_mask = false + (false << 1) + (true << 2);
-		bool status = __vm_call_ex(VMCALL_EPT_HOOK_PAGE, (unsigned __int64)target_address, (unsigned __int64)hook_function, (unsigned __int64)origin_function, protection_mask, 0, 0, 0, 0, 0);
+		bool status = __vm_call_ex(VMCALL_EPT_HOOK_PAGE, (unsigned __int64)target_address, (unsigned __int64)hook_function, 0, (unsigned __int64)origin_function, 0, 0, 0, 0, 0);
 		invept(false);
 
 		return status;
+	}
+
+	/// <summary>
+	/// Dump info about allocated pools (Use Dbgview to see information)
+	/// </summary>
+	void dump_pool_manager() 
+	{
+		__vm_call(VMCALL_DUMP_POOL_MANAGER, 0, 0, 0);
 	}
 
 	/// <summary>

@@ -1,7 +1,7 @@
 #pragma once
 #include "invalidators.h"
 
-#define MASK_EPT_PML1_OFFSET(_VAR_) (_VAR_ & 0xFFFULL)
+#define MASK_EPT_PML1_OFFSET(_VAR_) ((unsigned __int64)_VAR_ & 0xFFFULL)
 #define MASK_EPT_PML1_INDEX(_VAR_) ((_VAR_ & 0x1FF000ULL) >> 12)
 #define MASK_EPT_PML2_INDEX(_VAR_) ((_VAR_ & 0x3FE00000ULL) >> 21)
 #define MASK_EPT_PML3_INDEX(_VAR_) ((_VAR_ & 0x7FC0000000ULL) >> 30)
@@ -11,12 +11,12 @@
 union __eptp
 {
 	unsigned __int64 all;
-	struct 
+	struct
 	{
-		unsigned __int64 memory_type : 3; // bit 2:0 (0 = Uncacheable (UC) - 6 = Write - back(WB))
-		unsigned __int64 page_walk_length : 3; // bit 5:3 (This value is 1 less than the EPT page-walk length) 
-		unsigned __int64 dirty_and_aceess_enabled : 1; // bit 6  (Setting this control to 1 enables accessed and dirty flags for EPT)
-		unsigned __int64 reserved1 : 5; // bit 11:7 
+		unsigned __int64 memory_type : 3; 
+		unsigned __int64 page_walk_length : 3;
+		unsigned __int64 dirty_and_aceess_enabled : 1;
+		unsigned __int64 reserved1 : 5; 
 		unsigned __int64 pml4_address : 36;
 		unsigned __int64 reserved2 : 16;
 	};
@@ -27,7 +27,7 @@ union __eptp
 union __ept_pml4e
 {
 	unsigned __int64 all;
-	struct 
+	struct
 	{
 		unsigned __int64 read : 1; // bit 0
 		unsigned __int64 write : 1; // bit 1
@@ -47,7 +47,7 @@ union __ept_pml4e
 union __ept_pdpte
 {
 	unsigned __int64 all;
-	struct 
+	struct
 	{
 		unsigned __int64 read : 1; // bit 0
 		unsigned __int64 write : 1; // bit 1
@@ -66,7 +66,7 @@ union __ept_pdpte
 // See Table 28-5
 union __ept_pde {
 	unsigned __int64 all;
-	struct 
+	struct
 	{
 		unsigned __int64 read : 1; // bit 0
 		unsigned __int64 write : 1; // bit 1
@@ -101,7 +101,7 @@ union __ept_pde {
 // See Table 28-6																	 
 union __ept_pte {
 	unsigned __int64 all;
-	struct 
+	struct
 	{
 		unsigned __int64 read : 1; // bit 0											 
 		unsigned __int64 write : 1; // bit 1										 
@@ -138,10 +138,44 @@ struct __vmm_ept_page_table
 	DECLSPEC_ALIGN(PAGE_SIZE) __ept_pde pml2[512][512];
 };
 
+struct __ept_hooked_function_info 
+{
+	//
+	// Linked list entires for each function hook.
+	//
+	LIST_ENTRY hooked_function_list;
+
+	//
+	// Pointer to page with our hooked functions
+	//
+	unsigned __int8* fake_page_contents;
+
+	//
+	// Size of hook
+	//
+	unsigned __int64 hook_size;
+
+	//
+	// Virtual address of function
+	//
+	void* virtual_address;
+
+	//
+	// Address to first trampoline used to call original function
+	//
+	unsigned __int8* first_trampoline_address;
+
+	//
+	// Address of code cave which is used to jmp to our hooked function
+	//
+	void* second_trampoline_address;
+};
 
 struct __ept_hooked_page_info
 {
-
+	//
+	// Page with our hooked functions
+	//
 	DECLSPEC_ALIGN(PAGE_SIZE) unsigned __int8 fake_page_contents[PAGE_SIZE];
 
 	//
@@ -150,14 +184,14 @@ struct __ept_hooked_page_info
 	LIST_ENTRY hooked_page_list;
 
 	//
-	// The virtual address from the caller prespective view
+	// Linked list entries for each function hook
 	//
-	unsigned __int64 virtual_address;
+	LIST_ENTRY hooked_functions_list;
 
 	//
 	// The base address of the page. Used to find this structure in the list of page hooks
 	//
-	unsigned __int64 physical_base_address;
+	unsigned __int64 physical_frame_number;
 
 	//
 	// The base address of the page with fake contents. Used to swap page with fake contents
@@ -172,28 +206,17 @@ struct __ept_hooked_page_info
 	//
 	// The original page entry
 	// 
-	//
 	__ept_pte original_entry;
 
 	//
 	// The changed page entry
 	//
 	__ept_pte changed_entry;
-
-	//
-	// The buffer of the trampoline function which is used in the inline hook.
-	// We want to have at least 20 trampolines because there can be more function hooks inside one page
-	//
-	unsigned __int8* trampolines[20];
-
-	//
-	// We want to track how many trampolines are allocated
-	//
-	unsigned __int8 current_trampoline_index;
 };
 
 union __ept_violation
 {
+	unsigned __int64 all;
 	struct
 	{
 		/**
@@ -289,8 +312,6 @@ union __ept_violation
 		unsigned __int64 nmi_unblocking : 1;
 		unsigned __int64 reserved1 : 51;
 	};
-
-	unsigned __int64 all;
 };
 
 namespace ept
@@ -316,26 +337,26 @@ namespace ept
 	void swap_pml1_and_invalidate_tlb(__ept_pte* entry_address, __ept_pte entry_value, invept_type invalidation_type);
 
 	/// <summary>
-	/// Unhook all hooked pages and invalidate tlb
+	/// Unhook all functions and invalidate tlb
 	/// </summary>
-	void unhook_all_pages();
+	void unhook_all_functions();
 
 	/// <summary>
 	/// Perfrom a hook
 	/// </summary>
 	/// <param name="target_address" > Address of function which we want to hook </param>
 	/// <param name="hook_function"> Address of hooked version of function which we are hooking </param>
+	/// <param name="(Optional) trampoline"> Address of codecave which is located in 2gb range of target function (Use only if you need smaller trampoline)</param>
 	/// <param name="origin_function"> Address used to call original function </param>
-	/// <param name="protection_mask"> Determine which type of access cause vmexit </param>
 	/// <returns></returns>
-	bool hook_page(void* target_address, void* hook_function, void** origin_function, unsigned __int8 protection_mask);
+	bool hook_function(void* target_address, void* hook_function, void* trampoline, void** origin_function);
 
 	/// <summary>
-	/// Unhook single page
+	/// Unhook single function
 	/// </summary>
-	/// <param name="physical_address"></param>
+	/// <param name="virtual_address"></param>
 	/// <returns></returns>
-	bool unhook_page(unsigned __int64 physical_address);
+	bool unhook_function(unsigned __int64 virtual_address);
 
 	/// <summary>
 	/// Set or unset mtf

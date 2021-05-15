@@ -61,6 +61,9 @@
     <ClCompile Include="invalidators.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="vmm.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="poolmanager.h">
@@ -133,6 +136,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="invalidators.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="vmm.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

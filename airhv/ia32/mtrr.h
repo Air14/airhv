@@ -18,6 +18,7 @@ struct __mtrr_range_descriptor
 
 union __mtrr_physmask_reg
 {
+	unsigned __int64 all;
 	struct
 	{
 		unsigned __int64 reserved : 11;
@@ -25,11 +26,11 @@ union __mtrr_physmask_reg
 		unsigned __int64 physmask : 36;
 		unsigned __int64 reserved2 : 16;
 	};
-	unsigned __int64 all;
 };
 
 union __mtrr_physbase_reg
 {
+	unsigned __int64 all;
 	struct
 	{
 		unsigned __int64 type : 8;
@@ -37,11 +38,11 @@ union __mtrr_physbase_reg
 		unsigned __int64 physbase : 36;
 		unsigned __int64 reserved2 : 16;
 	};
-	unsigned __int64 all;
 };
 
 union __mtrr_cap_reg
 {
+	unsigned __int64 all;
 	struct
 	{
 		unsigned __int64 range_register_number : 8;
@@ -51,5 +52,4 @@ union __mtrr_cap_reg
 		unsigned __int64 smrr_support : 1;
 		unsigned __int64 reserved2 : 52;
 	};
-	unsigned __int64 all;
 };

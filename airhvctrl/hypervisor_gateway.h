@@ -18,26 +18,14 @@ namespace hvgt
 	/// Unhook all pages and invalidate tlb
 	/// </summary>
 	/// <returns> status </returns>
-	bool ept_unhook();
+	bool unhook_all_functions();
 
 	/// <summary>
 	/// Unhook single page and invalidate tlb
 	/// </summary>
 	/// <param name="page_physcial_address"></param>
 	/// <returns> status </returns>
-	bool ept_unhook(unsigned __int64 page_physcial_address);
-
-	/// <summary>
-	/// Hook some page via ept and invalidates mappings
-	/// </summary>
-	/// <param name="target_address">Address of function which we want to hook (only if execute right set)</param>
-	/// <param name="hook_function">Address of hook function (only if execute right set)</param>
-	/// <param name="origin_function">Address of function which is used to call original function (only if execute right set)</param>
-	/// <param name="read">If set ept violation will not occur on read access</param>
-	/// <param name="write">If set ept violation will not occur on write access</param>
-	/// <param name="execute">If set ept violation will not occur on execute access</param>
-	/// <returns> status </returns>
-	bool hook_page(void* target_address, void* hook_function, void** origin_function, bool read, bool write, bool execute);
+	bool unhook_function(void* function_address);
 
 	/// <summary>
 	/// Hook function via ept and invalidates mappings
@@ -47,6 +35,18 @@ namespace hvgt
 	/// <param name="origin_function">Address of function which is used to call original function</param>
 	/// <returns> status </returns>
 	bool hook_function(void* target_address, void* hook_function, void** origin_function);
+
+	/// <summary>
+	/// <summary>
+	/// Hook function via ept and invalidates mappings
+	/// </summary>
+	/// <param name="target_address">Address of function which we want to hook</param>
+	/// <param name="hook_function">Address of function which is used to call original function</param>
+	/// <param name="trampoline_address">Address of codecave which is at least 14 bytes in size and in 2GB range of target function address
+	/// Use only if function you want to hook uses some relatives jmps/moves in first 14 bytes</param>
+	/// <param name="origin_function">Address of function which is used to call original function</param>
+	/// <returns> status </returns>
+	bool hook_function(void* target_address, void* hook_function, void* trampoline_address, void** origin_function);
 
 	/// <summary>
 	/// Check if we can communicate with hypervisor
@@ -59,4 +59,9 @@ namespace hvgt
 	/// </summary>
 	/// <returns> status </returns>
 	bool send_irp_perform_allocation();
+
+	/// <summary>
+	/// Dump info about allocated pools (Use Dbgview to see information)
+	/// </summary>
+	void dump_pool_manager();
 }

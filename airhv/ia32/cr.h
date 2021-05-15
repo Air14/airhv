@@ -11,7 +11,7 @@ enum __cr_access_type
 union __cr_access_qualification 
 {
     unsigned __int64 all;
-    struct 
+    struct
     {
         unsigned __int64 cr_number : 4;
         unsigned __int64 access_type : 2;
@@ -26,6 +26,7 @@ union __cr_access_qualification
 
 union __cr_fixed
 {
+    unsigned __int64 all;
     struct
     {
         unsigned long low;
@@ -36,7 +37,6 @@ union __cr_fixed
         unsigned long low;
         long high;
     } u;
-    long long all;
 };
 
 union __cr8
@@ -53,7 +53,6 @@ union __cr0
 
 {
     unsigned __int64 all;
-
     struct
     {
         unsigned __int64 protection_enable : 1;
@@ -82,7 +81,6 @@ union __cr2
 union __cr3
 {
     unsigned __int64 all;
-
     struct
     {
         unsigned __int64 pcid : 12;
@@ -96,7 +94,6 @@ union __cr3
 union __cr4
 {
     unsigned __int64 all;
-
     struct
     {
         unsigned __int64 virtual_mode_extensions : 1;
@@ -128,7 +125,6 @@ union __cr4
 union __xcr0 
 {
     unsigned __int64 all;
-
     struct
     {
         unsigned __int64 x87 : 1;

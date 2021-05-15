@@ -17,17 +17,6 @@ namespace hv
 	bool virtualization_support();
 
 	/// <summary>
-	/// Initialize and launch vmm
-	/// </summary>
-	/// <returns> status </returns>
-	bool vmm_init();
-
-	/// <summary>
-	/// Deallocate all allocated structures
-	/// </summary>
-	void free_memory();
-
-	/// <summary>
 	/// Disable vmx operation
 	/// </summary>
 	/// <returns></returns>
