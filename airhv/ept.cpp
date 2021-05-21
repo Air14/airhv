@@ -520,7 +520,6 @@ namespace ept
 	{
 		unsigned __int64 physical_address = MmGetPhysicalAddress(target_function).QuadPart;
 
-		__debugbreak();
 		//
 		// Check if function exist in physical memory
 		//
