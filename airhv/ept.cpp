@@ -520,6 +520,7 @@ namespace ept
 	{
 		unsigned __int64 physical_address = MmGetPhysicalAddress(target_function).QuadPart;
 
+		__debugbreak();
 		//
 		// Check if function exist in physical memory
 		//
@@ -643,9 +644,6 @@ namespace ept
 			}
 		}
 
-		hooked_function_info->virtual_address = target_function;
-		hooked_function_info->fake_page_contents = hooked_page_info->fake_page_contents;
-
 		hooked_page_info->physical_frame_number = GET_PFN(physical_address);
 		hooked_page_info->physical_base_address_of_fake_page_contents = GET_PFN(MmGetPhysicalAddress(hooked_page_info->fake_page_contents).QuadPart);
 		hooked_page_info->entry_address = target_page;
@@ -660,6 +658,12 @@ namespace ept
 		changed_entry.physical_address = hooked_page_info->physical_base_address_of_fake_page_contents;
 		
 		RtlCopyMemory(&hooked_page_info->fake_page_contents, PAGE_ALIGN(target_function), PAGE_SIZE);
+
+		hooked_function_info->virtual_address = target_function;
+
+		hooked_function_info->second_trampoline_address = trampoline;
+
+		hooked_function_info->fake_page_contents = hooked_page_info->fake_page_contents;
 
 		if(hook_instruction_memory(hooked_function_info, target_function, hooked_function, trampoline, origin_function) == false)
 		{
