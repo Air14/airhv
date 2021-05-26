@@ -319,7 +319,7 @@ void set_entry_control(__vmx_entry_control& entry_control)
 	* The first processors to support the virtual-machine extensions supported only the 1-setting of
 	* this control.
 	*/
-	entry_control.load_dbg_controls = false;
+	entry_control.load_dbg_controls = true;
 
 	/**
 	* On processors that support Intel 64 architecture, this control determines whether the logical
