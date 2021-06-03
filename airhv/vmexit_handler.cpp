@@ -23,7 +23,6 @@ void vmexit_handle_exception(__vcpu* vcpu);
 void vmexit_ept_violation_handler(__vcpu* vcpu);
 void vmexit_cr_handler(__vcpu* vcpu);
 void vmexit_vm_instruction(__vcpu* vcpu);
-void vmexit_monitor_trap_flag(__vcpu* vcpu);
 void vmexit_triple_fault_handler(__vcpu* vcpu);
 void vmexit_failed(__vcpu* vcpu);
 void vmexit_invd_handler(__vcpu* vcpu);
@@ -77,7 +76,7 @@ void (*exit_handlers[EXIT_REASON_LAST])(__vcpu* guest_registers) =
 	vmexit_failed,									// 34 EXIT_REASON_MSR_LOADING
 	vmexit_unimplemented,							// 35 EXIT_REASON_RESERVED1
 	vmexit_unimplemented,							// 36 EXIT_REASON_MWAIT
-	vmexit_monitor_trap_flag,						// 37 EXIT_REASON_MONITOR_TRAP_FLAG
+	vmexit_unimplemented,						    // 37 EXIT_REASON_MONITOR_TRAP_FLAG
 	vmexit_unimplemented,							// 38 EXIT_REASON_RESERVED2
 	vmexit_unimplemented,							// 39 EXIT_REASON_MONITOR
 	vmexit_unimplemented,							// 40 EXIT_REASON_PAUSE
@@ -186,17 +185,15 @@ void vmexit_ept_violation_handler(__vcpu* vcpu)
 	{
 		current = current->Flink;
 		__ept_hooked_page_info* hooked_entry = CONTAINING_RECORD(current, __ept_hooked_page_info, hooked_page_list);
-		if (hooked_entry->physical_frame_number == GET_PFN(guest_physical_adddress))
+		if (hooked_entry->pfn_of_hooked_page == GET_PFN(guest_physical_adddress))
 		{
-			if (ept_violation.read_access || ept_violation.write_access) 
-			{
+			if ((ept_violation.read_access || ept_violation.write_access) && (!ept_violation.ept_readable || !ept_violation.ept_writeable)) 
 				ept::swap_pml1(hooked_entry->entry_address, hooked_entry->original_entry);
 
-				vcpu->ept_hook_restore_point = hooked_entry;
+			else if (ept_violation.execute_access && (ept_violation.ept_readable || ept_violation.ept_writeable))
+				ept::swap_pml1(hooked_entry->entry_address, hooked_entry->changed_entry);
 
-				ept::set_monitor_trap_flag(true);
-				break;
-			}
+			break;
 		}
 	}
 }
@@ -441,30 +438,29 @@ void vmexit_mov_dr_handler(__vcpu* vcpu)
 	{
 		switch (operation.debug_register_number)
 		{
-		case 0:
-			*gp_register = __readdr(0);
-			break;
+			case 0:
+				*gp_register = __readdr(0);
+				break;
 
-		case 1:
-			*gp_register = __readdr(1);
-			break;
+			case 1:
+				*gp_register = __readdr(1);
+				break;
 
-		case 2:
-			*gp_register = __readdr(2);
-			break;
+			case 2:
+				*gp_register = __readdr(2);
+				break;
 
-		case 3:
-			*gp_register = __readdr(3);
-			break;
+			case 3:
+				*gp_register = __readdr(3);
+				break;
 
-		case 6:
-			*gp_register = __readdr(6);
-			break;
+			case 6:
+				*gp_register = __readdr(6);
+				break;
 
-		case 7:
-			*gp_register = hv::vmread(GUEST_DR7);
-			break;
-
+			case 7:
+				*gp_register = hv::vmread(GUEST_DR7);
+				break;
 		}
 	}
 
@@ -848,29 +844,6 @@ void vmexit_rdtscp_handler(__vcpu* vcpu)
 	vcpu->vmexit_info.guest_registers->rax = MASK_GET_LOWER_32BITS(tsc);
 
 	adjust_rip(vcpu);
-}
-
-/// <summary>
-/// Monitor trap flag handler which is used for ept hooking handling
-/// </summary>
-/// <param name="guest_registers"></param>
-void vmexit_monitor_trap_flag(__vcpu* vcpu)
-{
-	if (vcpu->ept_hook_restore_point)
-	{
-		__ept_hooked_page_info* hooked_page_info = vcpu->ept_hook_restore_point;
-
-		ept::swap_pml1(hooked_page_info->entry_address, hooked_page_info->changed_entry);
-
-		vcpu->ept_hook_restore_point = NULL;
-	}
-	else
-	{
-		// We should never get here
-		ASSERT(FALSE);
-	}
-
-	ept::set_monitor_trap_flag(false);
 }
 
 /// <summary>

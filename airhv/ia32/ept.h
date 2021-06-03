@@ -191,12 +191,12 @@ struct __ept_hooked_page_info
 	//
 	// The base address of the page. Used to find this structure in the list of page hooks
 	//
-	unsigned __int64 physical_frame_number;
+	unsigned __int64 pfn_of_hooked_page;
 
 	//
 	// The base address of the page with fake contents. Used to swap page with fake contents
 	//
-	unsigned __int64 physical_base_address_of_fake_page_contents;
+	unsigned __int64 pfn_of_fake_page_contents;
 
 	//
 	// The page entry in the page tables that this page is targetting.
@@ -357,12 +357,6 @@ namespace ept
 	/// <param name="virtual_address"></param>
 	/// <returns></returns>
 	bool unhook_function(unsigned __int64 virtual_address);
-
-	/// <summary>
-	/// Set or unset mtf
-	/// </summary>
-	/// <param name="set"></param>
-	void set_monitor_trap_flag(bool set);
 
 	/// <summary>
 	/// Swap physcial pages and invalidate tlb

@@ -57,7 +57,7 @@ __vmm_context* g_vmm_context = 0;
 		 //
 		 case IOCTL_POOL_MANAGER_ALLOCATE:
 		 {
-			 pool_manager::perform_allocation();
+			 status = pool_manager::perform_allocation();
 			 break;
 		 }
 	 }

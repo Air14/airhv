@@ -322,6 +322,23 @@ namespace ept
 	/// </summary>
 	/// <param name="entry_address"> Pointer to page table entry which we want to change </param>
 	/// <param name="entry_value"> Pointer to page table entry which we want use to change </param>
+	void swap_pml1(__ept_pte* entry_address, __ept_pte entry_value)
+	{
+		// Acquire the lock
+		spinlock::lock(&g_vmm_context->ept_state->pml_lock);
+
+		// Set the value
+		entry_address->all = entry_value.all;
+
+		// Release the lock
+		spinlock::unlock(&g_vmm_context->ept_state->pml_lock);
+	}
+
+	/// <summary>
+	/// Swap physcial pages and invalidate tlb
+	/// </summary>
+	/// <param name="entry_address"> Pointer to page table entry which we want to change </param>
+	/// <param name="entry_value"> Pointer to page table entry which we want use to change </param>
 	/// <param name="invalidation_type"> Specifiy if we want to invalidate single context or all contexts  </param>
 	void swap_pml1_and_invalidate_tlb(__ept_pte* entry_address, __ept_pte entry_value, invept_type invalidation_type)
 	{
@@ -343,24 +360,6 @@ namespace ept
 		// Release the lock
 		spinlock::unlock(&g_vmm_context->ept_state->pml_lock);
 	}
-
-	/// <summary>
-	/// Swap physcial pages and invalidate tlb
-	/// </summary>
-	/// <param name="entry_address"> Pointer to page table entry which we want to change </param>
-	/// <param name="entry_value"> Pointer to page table entry which we want use to change </param>
-	void swap_pml1(__ept_pte* entry_address, __ept_pte entry_value)
-	{
-		// Acquire the lock
-		spinlock::lock(&g_vmm_context->ept_state->pml_lock);
-
-		// Set the value
-		entry_address->all = entry_value.all;
-
-		// Release the lock
-		spinlock::unlock(&g_vmm_context->ept_state->pml_lock);
-	}
-
 
 	/// <summary>
 	/// Write an absolute jump, We aren't touching any register except stack so it's the most safest trampoline
@@ -538,7 +537,7 @@ namespace ept
 			current = current->Flink;
 			__ept_hooked_page_info* hooked_page_info = CONTAINING_RECORD(current, __ept_hooked_page_info, hooked_page_list);
 
-			if (hooked_page_info->physical_frame_number == GET_PFN(physical_address))
+			if (hooked_page_info->pfn_of_hooked_page == GET_PFN(physical_address))
 			{
 				LogInfo("Page already hooked");
 
@@ -643,18 +642,22 @@ namespace ept
 			}
 		}
 
-		hooked_page_info->physical_frame_number = GET_PFN(physical_address);
-		hooked_page_info->physical_base_address_of_fake_page_contents = GET_PFN(MmGetPhysicalAddress(hooked_page_info->fake_page_contents).QuadPart);
+		hooked_page_info->pfn_of_hooked_page = GET_PFN(physical_address);
+		hooked_page_info->pfn_of_fake_page_contents = GET_PFN(MmGetPhysicalAddress(hooked_page_info->fake_page_contents).QuadPart);
 		hooked_page_info->entry_address = target_page;
+
+		hooked_page_info->entry_address->execute = 0;
+		hooked_page_info->entry_address->read = 1;
+		hooked_page_info->entry_address->write = 1;
+
 		hooked_page_info->original_entry = *target_page;
+		hooked_page_info->changed_entry = *target_page;
 
-		__ept_pte changed_entry = *target_page;
+		hooked_page_info->changed_entry.read = 0;
+		hooked_page_info->changed_entry.write = 0;
+		hooked_page_info->changed_entry.execute = 1;
 
-		changed_entry.read = 0;
-		changed_entry.write = 0;
-		changed_entry.execute = 1;
-
-		changed_entry.physical_address = hooked_page_info->physical_base_address_of_fake_page_contents;
+		hooked_page_info->changed_entry.physical_address = hooked_page_info->pfn_of_fake_page_contents;
 		
 		RtlCopyMemory(&hooked_page_info->fake_page_contents, PAGE_ALIGN(target_function), PAGE_SIZE);
 
@@ -674,15 +677,13 @@ namespace ept
 			return false;
 		}
 
-		hooked_page_info->changed_entry = changed_entry;
-
 		// Track all hooked functions
 		InsertHeadList(&hooked_page_info->hooked_functions_list, &hooked_function_info->hooked_function_list);
 
 		// Track all hooked pages
 		InsertHeadList(&g_vmm_context->ept_state->hooked_page_list, &hooked_page_info->hooked_page_list);
 
-		swap_pml1_and_invalidate_tlb(target_page, changed_entry, INVEPT_SINGLE_CONTEXT);
+		//swap_pml1_and_invalidate_tlb(target_page, changed_entry, INVEPT_SINGLE_CONTEXT);
 
 		return true;
 	}
@@ -708,7 +709,7 @@ namespace ept
 
 			//
 			// Check if function pfn is equal to pfn saved in hooked page info
-			if (hooked_page_info->physical_frame_number == GET_PFN(physical_address))
+			if (hooked_page_info->pfn_of_hooked_page == GET_PFN(physical_address))
 			{
 				PLIST_ENTRY current_hooked_function;
 				current_hooked_function = &hooked_page_info->hooked_functions_list;
@@ -743,6 +744,7 @@ namespace ept
 						// If there is no more function hooks free hooked page info struct
 						if (hooked_page_info->hooked_functions_list.Flink == hooked_page_info->hooked_functions_list.Blink)
 						{
+							hooked_page_info->original_entry.execute = 1;
 							swap_pml1_and_invalidate_tlb(hooked_page_info->entry_address, hooked_page_info->original_entry, INVEPT_SINGLE_CONTEXT);
 
 							RemoveEntryList(current_hooked_page);
@@ -788,6 +790,7 @@ namespace ept
 			}
 
 			// Restore original pte value
+			hooked_entry->original_entry.execute = 1;
 			swap_pml1_and_invalidate_tlb(hooked_entry->entry_address, hooked_entry->original_entry, INVEPT_SINGLE_CONTEXT);
 
 			RemoveEntryList(current_hooked_page);
@@ -796,25 +799,5 @@ namespace ept
 
 			pool_manager::release_pool(hooked_entry);
 		}
-	}
-
-	/// <summary>
-	/// Set or unset mtf
-	/// </summary>
-	/// <param name="set"></param>
-	void set_monitor_trap_flag(bool set)
-	{
-		unsigned __int64 vm_execution_controls = hv::vmread(CONTROL_PRIMARY_PROCESSOR_BASED_VM_EXECUTION_CONTROLS);
-
-		if (set)
-		{
-			vm_execution_controls |= CPU_BASED_MONITOR_TRAP_FLAG;
-		}
-		else
-		{
-			vm_execution_controls &= ~CPU_BASED_MONITOR_TRAP_FLAG;
-		}
-
-		__vmx_vmwrite(CONTROL_PRIMARY_PROCESSOR_BASED_VM_EXECUTION_CONTROLS, vm_execution_controls);
 	}
 }

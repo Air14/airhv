@@ -76,8 +76,6 @@ struct __vcpu
     __vmcs* vmxon;
     unsigned __int64 vmxon_physical;
 
-    __ept_hooked_page_info* ept_hook_restore_point;
-
     struct __vmexit_info
     {
         __vmexit_guest_registers* guest_registers;
