@@ -127,6 +127,84 @@ void vmexit_msr_read_handler(__vcpu* vcpu)
 
 	switch (msr_index)
 	{
+		case IA32_INTERRUPT_SSP_TABLE_ADDR:
+		{
+			msr.all = hv::vmread(GUEST_INTERRUPT_SSP_TABLE_ADDR);
+			break;
+		}
+
+		case IA32_SYSENTER_CS:
+		{
+			msr.all = hv::vmread(GUEST_SYSENTER_CS);
+			break;
+		}
+
+		case IA32_SYSENTER_EIP:
+		{
+			msr.all = hv::vmread(GUEST_SYSENTER_EIP);
+			break;
+		}
+
+		case IA32_SYSENTER_ESP:
+		{
+			msr.all = hv::vmread(GUEST_SYSENTER_ESP);
+			break;
+		}
+
+		case IA32_S_CET:
+		{
+			msr.all = hv::vmread(GUEST_S_CET);
+			break;
+		}
+
+		case IA32_PERF_GLOBAL_CTRL:
+		{
+			msr.all = hv::vmread(GUEST_PERF_GLOBAL_CONTROL);
+			break;
+		}
+
+		case IA32_PKRS:
+		{
+			msr.all = hv::vmread(GUEST_PKRS);
+			break;
+		}
+
+		case IA32_RTIT_CTL:
+		{
+			msr.all = hv::vmread(GUEST_RTIT_CTL);
+			break;
+		}
+
+		case IA32_BNDCFGS:
+		{
+			msr.all = hv::vmread(GUEST_BNDCFGS);
+			break;
+		}
+
+		case IA32_PAT:
+		{
+			msr.all = hv::vmread(GUEST_PAT);
+			break;
+		}
+
+		case IA32_EFER:
+		{
+			msr.all = hv::vmread(GUEST_EFER);
+			break;
+		}
+
+		case IA32_GS_BASE:
+		{
+			msr.all = hv::vmread(GUEST_GS_BASE);
+			break;
+		}
+
+		case IA32_FS_BASE:
+		{
+			msr.all = hv::vmread(GUEST_FS_BASE);
+			break;
+		}
+
 		default:
 		{
 			msr.all = __readmsr(msr_index);
@@ -155,17 +233,97 @@ void vmexit_msr_write_handler(__vcpu* vcpu)
 		return;
 	}
 
+	msr.high = vcpu->vmexit_info.guest_registers->rdx;
+	msr.low = vcpu->vmexit_info.guest_registers->rax;
+
 	switch (msr_index)
 	{
+		case IA32_INTERRUPT_SSP_TABLE_ADDR:
+		{
+			hv::vmwrite(GUEST_INTERRUPT_SSP_TABLE_ADDR, msr.all);
+			break;
+		}
+
+		case IA32_SYSENTER_CS:
+		{
+			hv::vmwrite(GUEST_SYSENTER_CS, msr.all);
+			break;
+		}
+
+
+		case IA32_SYSENTER_EIP:
+		{
+			hv::vmwrite(GUEST_SYSENTER_EIP, msr.all);
+			break;
+		}
+
+		case IA32_SYSENTER_ESP:
+		{
+			hv::vmwrite(GUEST_SYSENTER_ESP, msr.all);
+			break;
+		}
+
+		case IA32_S_CET:
+		{
+			hv::vmwrite(GUEST_S_CET, msr.all);
+			break;
+		}
+
+		case IA32_PERF_GLOBAL_CTRL:
+		{
+			hv::vmwrite(GUEST_PERF_GLOBAL_CONTROL, msr.all);
+			break;
+		}
+
+		case IA32_PKRS:
+		{
+			hv::vmwrite(GUEST_PKRS, msr.all);
+			break;
+		}
+
+		case IA32_RTIT_CTL:
+		{
+			hv::vmwrite(GUEST_RTIT_CTL, msr.all);
+			break;
+		}
+
+		case IA32_BNDCFGS:
+		{
+			hv::vmwrite(GUEST_BNDCFGS, msr.all);
+			break;
+		}
+
+		case IA32_PAT:
+		{
+			hv::vmwrite(GUEST_PAT, msr.all);
+			break;
+		}
+
+		case IA32_EFER:
+		{
+			hv::vmwrite(GUEST_EFER, msr.all);
+			break;
+		}
+
+		case IA32_GS_BASE:
+		{
+			hv::vmwrite(GUEST_GS_BASE, msr.all);
+			break;
+		}
+
+		case IA32_FS_BASE:
+		{
+			hv::vmwrite(GUEST_FS_BASE, msr.all);
+			break;
+		}
+
 		default:
 		{
-			msr.high = vcpu->vmexit_info.guest_registers->rdx;
-			msr.low = vcpu->vmexit_info.guest_registers->rax;
+			__writemsr(msr_index, msr.all);
 			break;
 		}
 	}
 
-	__writemsr(msr_index, msr.all);
 	adjust_rip(vcpu);
 }
 

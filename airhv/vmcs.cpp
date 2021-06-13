@@ -365,7 +365,7 @@ void set_entry_control(__vmx_entry_control& entry_control)
 	* If this control is 1, Intel Processor Trace does not produce a paging information packet (PIP) on
 	* a VM entry or a VMCS packet on a VM entry that returns from SMM (see Chapter 35).
 	*/
-	entry_control.conceal_vmx_from_pt = false;
+	entry_control.conceal_vmx_from_pt = true;
 
 	/**
 	* This control determines whether the IA32_RTIT_CTL MSR is loaded on VM entry.
@@ -394,7 +394,7 @@ void set_exit_control(__vmx_exit_control& exit_control)
 	* The first processors to support the virtual-machine extensions supported only the 1-
 	* setting of this control.
 	*/
-	exit_control.save_dbg_controls = false;
+	exit_control.save_dbg_controls = true;
 
 	/**
 	* On processors that support Intel 64 architecture, this control determines whether a logical
@@ -454,7 +454,7 @@ void set_exit_control(__vmx_exit_control& exit_control)
 	* If this control is 1, Intel Processor Trace does not produce a paging information packet (PIP)
 	* on a VM exit or a VMCS packet on an SMM VM exit (see Chapter 35).
 	*/
-	exit_control.conceal_vmx_from_pt = false;
+	exit_control.conceal_vmx_from_pt = true;
 
 	/**
 	* This control determines whether the IA32_RTIT_CTL MSR is cleared on VM exit.
