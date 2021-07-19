@@ -127,6 +127,8 @@ struct __vmm_context
     __ept_state* ept_state;
 
     unsigned __int32 processor_count;
+    unsigned __int32 highest_basic_leaf;
+    bool hv_presence;
 };
 
 extern __vmm_context* g_vmm_context;

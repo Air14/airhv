@@ -36,6 +36,7 @@ void vmexit_mov_dr_handler(__vcpu* vcpu);
 void vmexit_cpuid_handler(__vcpu* vcpu);
 void vmexit_msr_read_handler(__vcpu* vcpu);
 void vmexit_msr_write_handler(__vcpu* vcpu);
+void vmexit_invpcid_handler(__vcpu* vcpu);
 
 void (*exit_handlers[EXIT_REASON_LAST])(__vcpu* guest_registers) =
 {
@@ -97,7 +98,7 @@ void (*exit_handlers[EXIT_REASON_LAST])(__vcpu* guest_registers) =
 	vmexit_xsetbv_handler,							// 55 EXIT_REASON_XSETBV
 	vmexit_unimplemented,							// 56 EXIT_REASON_APIC_WRITE
 	vmexit_rdrand_handler,							// 57 EXIT_REASON_RDRAND
-	vmexit_unimplemented,							// 58 EXIT_REASON_INVPCID
+	vmexit_invpcid_handler,							// 58 EXIT_REASON_INVPCID
 	vmexit_vm_instruction,							// 59 EXIT_REASON_VMFUNC
 	vmexit_unimplemented,							// 60 EXIT_REASON_ENCLS
 	vmexit_rdseed_handler,							// 61 EXIT_REASON_RDSEED
@@ -250,7 +251,6 @@ void vmexit_msr_write_handler(__vcpu* vcpu)
 			break;
 		}
 
-
 		case IA32_SYSENTER_EIP:
 		{
 			hv::vmwrite(GUEST_SYSENTER_EIP, msr.all);
@@ -386,33 +386,38 @@ void vmexit_cpuid_handler(__vcpu* vcpu)
 {
 	__cpuid_info cpuid_reg = { 0 };
 
-	// these cpuids aren't implemented
-	if (!(vcpu->vmexit_info.guest_registers->rax >= 0x4000000 && vcpu->vmexit_info.guest_registers->rax <= 0x4FFFFFFF))
-	{
+	if (g_vmm_context->hv_presence == false &&
+		vcpu->vmexit_info.guest_registers->rax >= 0x40000000 &&
+		vcpu->vmexit_info.guest_registers->rax <= 0x4FFFFFFF)
+		__cpuidex((int*)&cpuid_reg.eax, g_vmm_context->highest_basic_leaf, 0);
+
+	else 
 		__cpuidex((int*)&cpuid_reg.eax, vcpu->vmexit_info.guest_registers->rax, vcpu->vmexit_info.guest_registers->rcx);
-	}
 
 	if (vcpu->vmexit_info.guest_registers->rax == CPUID_PROCESSOR_FEATURES)
-	{
-		// Hypervisor present bit
-		cpuid_reg.cpuid_eax_01.feature_information_ecx.hypervisor_present = true;
-	}
+		cpuid_reg.cpuid_eax_01.feature_information_ecx.hypervisor_present = g_vmm_context->hv_presence; // Hypervisor present bit
 
 	else if (vcpu->vmexit_info.guest_registers->rax == CPUID_HV_VENDOR_AND_MAX_FUNCTIONS)
 	{
-		cpuid_reg.eax = CPUID_HV_INTERFACE;
-		cpuid_reg.ebx = 'hria';  // airhv
-		cpuid_reg.ecx = 'v\x00\x00\x00';
-		cpuid_reg.edx = 0;
+		if (g_vmm_context->hv_presence == true)
+		{
+			cpuid_reg.eax = CPUID_HV_INTERFACE;
+			cpuid_reg.ebx = 'hria';  // airhv
+			cpuid_reg.ecx = 'v\x00\x00\x00';
+			cpuid_reg.edx = 0;
+		}
 	}
 
 	else if (vcpu->vmexit_info.guest_registers->rax == CPUID_HV_INTERFACE)
 	{
-		//
-		// This indicates that our hypervisor doesn't conform to microsoft hyperv interaface
-		//
-		cpuid_reg.eax = '0#vH';
-		cpuid_reg.ebx = cpuid_reg.ecx = cpuid_reg.edx = 0;
+		if (g_vmm_context->hv_presence == true)
+		{
+			//
+			// This indicates that our hypervisor doesn't conform to microsoft hyperv interaface
+			//
+			cpuid_reg.eax = '0#vH';
+			cpuid_reg.ebx = cpuid_reg.ecx = cpuid_reg.edx = 0;
+		}
 	}
 
 	vcpu->vmexit_info.guest_registers->rax = cpuid_reg.eax;
@@ -1033,8 +1038,8 @@ void vmexit_triple_fault_handler(__vcpu* vcpu)
 	// Dump whole vmcs state before hard reset
 	//
 	UNREFERENCED_PARAMETER(vcpu);
-	ASSERT(FALSE);
 	hv::dump_vmcs();
+	ASSERT(FALSE);
 	hv::hard_reset();
 }
 
@@ -1052,6 +1057,7 @@ void vmexit_rdtsc_handler(__vcpu* vcpu)
 	// See "Time Stamp Counter" in Chapter 15 of the IA-32 Intel Architecture Software Developer's Manual, 
 	// Volume 3 for specific details of the time stamp counter behavior.
 	//
+
 	unsigned __int64 tsc = __rdtsc();
 
 	vcpu->vmexit_info.guest_registers->rdx = MASK_GET_HIGHER_32BITS(tsc) >> 32;
@@ -1306,6 +1312,7 @@ void vmexit_cr_handler(__vcpu* vcpu)
 bool vmexit_handler(__vmexit_guest_registers* guest_registers)
 {
 	__vcpu* vcpu = g_vmm_context->vcpu_table[KeGetCurrentProcessorNumber()];
+
 	guest_registers->rsp = hv::vmread(GUEST_RSP);
 
 	vcpu->vmexit_info.reason = hv::vmread(EXIT_REASON) & 0xffff;

@@ -146,6 +146,20 @@ void vmexit_vmcall_handler(__vcpu* vcpu)
 			adjust_rip(vcpu);
 			break;
 		}
+
+		case VMCALL_HIDE_HV_PRESENCE:
+		{
+			g_vmm_context->hv_presence = false;
+			adjust_rip(vcpu);
+			break;
+		}
+
+		case VMCALL_UNHIDE_HV_PRESENCE:
+		{
+			g_vmm_context->hv_presence = true;
+			adjust_rip(vcpu);
+			break;
+		}
 	}
 
 	vcpu->vmexit_info.guest_registers->rax = status;

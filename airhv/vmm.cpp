@@ -157,6 +157,8 @@ bool init_vmcs(__vcpu* vcpu)
 /// <returns> status </returns>
 bool allocate_vmm_context()
 {
+	__cpuid_info cpuid_reg = { 0 };
+
 	//
 	// Allocate Nonpaged memory for vm global context structure
 	//
@@ -210,6 +212,11 @@ bool allocate_vmm_context()
 		return false;
 	}
 
+	g_vmm_context->hv_presence = true;
+
+	__cpuid((int*)&cpuid_reg.eax, 0);
+	g_vmm_context->highest_basic_leaf = cpuid_reg.eax;
+
 	return true;
 }
 
@@ -217,13 +224,13 @@ bool allocate_vmm_context()
 /// Allocate whole vcpu context and bitmaps
 /// </summary>
 /// <returns> Pointer to vcpu </returns>
-__vcpu* init_vcpu()
+bool init_vcpu(__vcpu*& vcpu)
 {
-	__vcpu* vcpu = allocate_pool<__vcpu>();
+	vcpu = allocate_pool<__vcpu>();
 	if (vcpu == nullptr)
 	{
 		LogError("vcpu structure could not be allocated");
-		return nullptr;
+		return false;
 	}
 	RtlSecureZeroMemory(vcpu, sizeof(__vcpu));
 
@@ -231,7 +238,7 @@ __vcpu* init_vcpu()
 	if (vcpu->vmm_stack == nullptr)
 	{
 		LogError("vmm stack could not be allocated");
-		return nullptr;
+		return false;
 	}
 	RtlSecureZeroMemory(vcpu->vmm_stack, VMM_STACK_SIZE);
 
@@ -239,7 +246,7 @@ __vcpu* init_vcpu()
 	if (vcpu->vcpu_bitmaps.msr_bitmap == nullptr)
 	{
 		LogError("msr bitmap could not be allocated");
-		return nullptr;
+		return false;
 	}
 	RtlSecureZeroMemory(vcpu->vcpu_bitmaps.msr_bitmap, PAGE_SIZE);
 	vcpu->vcpu_bitmaps.msr_bitmap_physical = MmGetPhysicalAddress(vcpu->vcpu_bitmaps.msr_bitmap).QuadPart;
@@ -248,7 +255,7 @@ __vcpu* init_vcpu()
 	if (vcpu->vcpu_bitmaps.io_bitmap_a == nullptr)
 	{
 		LogError("io bitmap a could not be allocated");
-		return nullptr;
+		return false;
 	}
 	RtlSecureZeroMemory(vcpu->vcpu_bitmaps.io_bitmap_a, PAGE_SIZE);
 	vcpu->vcpu_bitmaps.io_bitmap_a_physical = MmGetPhysicalAddress(vcpu->vcpu_bitmaps.io_bitmap_a).QuadPart;
@@ -257,13 +264,14 @@ __vcpu* init_vcpu()
 	if (vcpu->vcpu_bitmaps.io_bitmap_b == nullptr)
 	{
 		LogError("io bitmap b could not be allocated");
-		return nullptr;
+		return false;
 	}
 	RtlSecureZeroMemory(vcpu->vcpu_bitmaps.io_bitmap_b, PAGE_SIZE);
 	vcpu->vcpu_bitmaps.io_bitmap_b_physical = MmGetPhysicalAddress(vcpu->vcpu_bitmaps.io_bitmap_b).QuadPart;
 
 	LogInfo("vcpu entry allocated successfully at %llX", vcpu);
-	return vcpu;
+
+	return true;
 }
 
 /// <summary>
@@ -328,7 +336,8 @@ void adjust_control_registers()
 	__ia32_feature_control_msr feature_msr = { 0 };
 	feature_msr.all = __readmsr(IA32_FEATURE_CONTROL);
 
-	if (feature_msr.lock == 0) {
+	if (feature_msr.lock == 0) 
+	{
 		feature_msr.vmxon_outside_smx = 1;
 		feature_msr.lock = 1;
 
@@ -343,15 +352,14 @@ void adjust_control_registers()
 /// <param name="guest_rsp"></param>
 void init_logical_processor(void* guest_rsp)
 {
-	__vcpu* vcpu;
-
 	unsigned __int64 processor_number = KeGetCurrentProcessorNumber();
 
-	vcpu = g_vmm_context->vcpu_table[processor_number];
+	__vcpu* vcpu = g_vmm_context->vcpu_table[processor_number];
 
 	adjust_control_registers();
 
-	if (__vmx_on(&vcpu->vmxon_physical)) {
+	if (__vmx_on(&vcpu->vmxon_physical)) 
+	{
 		LogError("Failed to put vcpu %d into VMX operation.\n", processor_number);
 		return;
 	}
@@ -365,7 +373,7 @@ void init_logical_processor(void* guest_rsp)
 	__vmx_vmlaunch();
 
 	// We should never get here
-
+	
 	LogError("Vmlaunch failed");
 	ASSERT(FALSE);
 	vcpu->vcpu_status.vmm_launched = false;
@@ -380,28 +388,20 @@ void init_logical_processor(void* guest_rsp)
 bool vmm_init()
 {
 	if (allocate_vmm_context() == false)
-	{
 		return false;
-	}
 
 	//
 	// Initalize vcpu for each logical core
-	for (unsigned int iter = 0; iter < g_vmm_context->processor_count; iter++) {
-		g_vmm_context->vcpu_table[iter] = init_vcpu();
-		if (g_vmm_context->vcpu_table[iter] == nullptr)
-		{
+	for (unsigned int iter = 0; iter < g_vmm_context->processor_count; iter++) 
+	{
+		if (init_vcpu(g_vmm_context->vcpu_table[iter]) == false)
 			return false;
-		}
 
 		if (init_vmxon(g_vmm_context->vcpu_table[iter]) == false)
-		{
 			return false;
-		}
 
 		if (init_vmcs(g_vmm_context->vcpu_table[iter]) == false)
-		{
 			return false;
-		}
 	}
 
 	//

@@ -60,6 +60,18 @@ namespace hvgt
 	}
 
 	/// <summary>
+	/// Set/Unset presence of hypervisor
+	/// </summary>
+	/// <param name="value"> If false, hypervisor is not visible via cpuid interface, If true, it become visible</param>
+	void hypervisor_visible(bool value)
+	{
+		if (value == true)
+			__vm_call(VMCALL_UNHIDE_HV_PRESENCE, 0, 0, 0);
+		else
+			__vm_call(VMCALL_HIDE_HV_PRESENCE, 0, 0, 0);
+	}
+
+	/// <summary>
 	/// Unhook all functions and invalidate tlb
 	/// </summary>
 	/// <returns> status </returns>

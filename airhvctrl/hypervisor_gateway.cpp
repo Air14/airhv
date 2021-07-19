@@ -16,12 +16,13 @@ enum vm_call_reasons
 {
 	VMCALL_TEST,
 	VMCALL_VMXOFF,
-	VMCALL_EPT_HOOK_PAGE,
-	VMCALL_EPT_UNHOOK_PAGE,
-	VMCALL_UNHOOK_ALL_PAGES,
+	VMCALL_EPT_HOOK_FUNCTION,
+	VMCALL_EPT_UNHOOK_FUNCTION,
 	VMCALL_INVEPT_CONTEXT,
 	VMCALL_DUMP_POOL_MANAGER,
-	VMCALL_DUMP_VMCS_STATE
+	VMCALL_DUMP_VMCS_STATE,
+	VMCALL_HIDE_HV_PRESENCE,
+	VMCALL_UNHIDE_HV_PRESENCE
 };
 
 namespace hvgt
@@ -76,12 +77,24 @@ namespace hvgt
 	}
 
 	/// <summary>
+	/// Set/Unset presence of hypervisor
+	/// </summary>
+	/// <param name="value"> If false, hypervisor is not visible via cpuid interface, If true, it become visible</param>
+	void hypervisor_visible(bool value)
+	{
+		if (value == true)
+			__vm_call(VMCALL_UNHIDE_HV_PRESENCE, 0, 0, 0);
+		else
+			__vm_call(VMCALL_HIDE_HV_PRESENCE, 0, 0, 0);
+	}
+
+	/// <summary>
 	/// Unhook all pages and invalidate tlb
 	/// </summary>
 	/// <returns> status </returns>
 	bool unhook_all_functions()
 	{
-		bool status = __vm_call(VMCALL_EPT_UNHOOK_PAGE, true, 0, 0);
+		bool status = __vm_call(VMCALL_EPT_UNHOOK_FUNCTION, true, 0, 0);
 		invept(false);
 		return status;
 	}
@@ -93,11 +106,10 @@ namespace hvgt
 	/// <returns> status </returns>
 	bool unhook_function(void* function_address)
 	{
-		bool status = __vm_call(VMCALL_EPT_UNHOOK_PAGE, false, (unsigned __int64)function_address, 0);
+		bool status = __vm_call(VMCALL_EPT_UNHOOK_FUNCTION, false, (unsigned __int64)function_address, 0);
 		invept(false);
 		return status;
 	}
-
 
 	/// <summary>
 	/// Hook function via ept and invalidates mappings
@@ -110,7 +122,7 @@ namespace hvgt
 	/// <returns> status </returns>
 	bool hook_function(void* target_address, void* hook_function, void* trampoline_address, void** origin_function)
 	{
-		bool status = __vm_call_ex(VMCALL_EPT_HOOK_PAGE, (unsigned __int64)target_address, (unsigned __int64)hook_function, (unsigned __int64)trampoline_address, (unsigned __int64)origin_function, 0, 0, 0, 0, 0);
+		bool status = __vm_call_ex(VMCALL_EPT_HOOK_FUNCTION, (unsigned __int64)target_address, (unsigned __int64)hook_function, (unsigned __int64)trampoline_address, (unsigned __int64)origin_function, 0, 0, 0, 0, 0);
 		invept(false);
 
 		return status;
@@ -125,7 +137,7 @@ namespace hvgt
 	/// <returns> status </returns>
 	bool hook_function(void* target_address, void* hook_function, void** origin_function)
 	{
-		bool status = __vm_call_ex(VMCALL_EPT_HOOK_PAGE, (unsigned __int64)target_address, (unsigned __int64)hook_function, 0, (unsigned __int64)origin_function, 0, 0, 0, 0, 0);
+		bool status = __vm_call_ex(VMCALL_EPT_HOOK_FUNCTION, (unsigned __int64)target_address, (unsigned __int64)hook_function, 0, (unsigned __int64)origin_function, 0, 0, 0, 0, 0);
 		invept(false);
 
 		return status;

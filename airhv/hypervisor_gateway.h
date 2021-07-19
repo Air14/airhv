@@ -14,6 +14,12 @@ namespace hvgt
 	void invept(bool invept_all);
 
 	/// <summary>
+	/// Set/Unset presence of hypervisor
+	/// </summary>
+	/// <param name="value"> If false, hypervisor is not visible via cpuid interface, If true, it become visible</param>
+	void hypervisor_visible(bool value);
+
+	/// <summary>
 	/// Unhook all pages and invalidate tlb
 	/// </summary>
 	/// <returns> status </returns>
