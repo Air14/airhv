@@ -57,10 +57,29 @@ struct __segment_descriptor
     unsigned __int32 reserved;
 };
 
+union __segment_selector 
+{
+    unsigned short all;
+    struct
+    {
+        unsigned short rpl : 2;
+        unsigned short ti : 1;
+        unsigned short index : 13;
+    };
+};
+
 #pragma pack(push, 1)
-struct __pseudo_descriptor
+struct __pseudo_descriptor64
 {
     unsigned __int16 limit;
     unsigned __int64 base_address;
+};
+#pragma pack(pop)
+
+#pragma pack(push, 1)
+struct __pseudo_descriptor32
+{
+    unsigned __int16 limit;
+    unsigned __int32 base_address;
 };
 #pragma pack(pop)

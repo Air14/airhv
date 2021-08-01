@@ -141,6 +141,9 @@
     <ClInclude Include="vmm.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="xsave.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <MASM Include="lde\lde64.asm">

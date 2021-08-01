@@ -14,6 +14,7 @@
 #include "vmcall_handler.h"
 #include "interrupt.h"
 #include "allocators.h"
+#include "asm/vm_intrin.h"
 
 #define NON_CANONICIAL_ADDRESS_END 0xFFFF800000000000
 #define NON_CANONICIAL_ADDRESS_START 0x0000800000000000
@@ -29,17 +30,17 @@ namespace hv
 	/// <param name="type"></param>
 	/// <param name="error_code"></param>
 	/// <param name="deliver_error_code"></param>
-	void inject_event(unsigned __int32 vector, unsigned __int32 type, unsigned __int32 error_code, bool deliver_error_code)
+	void inject_interruption(unsigned __int32 vector, unsigned __int32 type, unsigned __int32 error_code, bool deliver_error_code)
 	{
 		__vmentry_interrupt_info interrupt = { 0 };
-		unsigned __int64 instruction_length = hv::vmread(VM_EXIT_INSTRUCTION_LENGTH);
 
 		interrupt.interruption_type = type;
 		interrupt.interrupt_vector = vector;
 		interrupt.deliver_error_code = deliver_error_code;
 		interrupt.valid = 1;
 
-		hv::vmwrite<unsigned __int64>(CONTROL_VM_ENTRY_INSTRUCTION_LENGTH, instruction_length);
+		if(type == INTERRUPT_TYPE_SOFTWARE_EXCEPTION || type == INTERRUPT_TYPE_PRIVILEGED_SOFTWARE_INTERRUPT || type == INTERRUPT_TYPE_SOFTWARE_INTERRUPT)
+			hv::vmwrite<unsigned __int64>(CONTROL_VM_ENTRY_INSTRUCTION_LENGTH, hv::vmread(VM_EXIT_INSTRUCTION_LENGTH));
 
 		if (deliver_error_code == true)
 			hv::vmwrite<unsigned __int64>(CONTROL_VM_ENTRY_EXCEPTION_ERROR_CODE, error_code);
@@ -264,11 +265,13 @@ namespace hv
 
 		unsigned __int64 displacement = vcpu->vmexit_info.qualification;
 
-		unsigned __int64 base_value = instruction_information.base_reg_invalid ? *(unsigned __int64*)(&vcpu->vmexit_info.guest_registers - instruction_information.base_reg) : 0;
+		unsigned __int64 base_value = !instruction_information.base_reg_invalid ? *(&vcpu->vmexit_info.guest_registers->rax - instruction_information.base_reg) : 0;
 
-		unsigned __int64 index_value = instruction_information.index_reg_invalid ? *(unsigned __int64*)(&vcpu->vmexit_info.guest_registers - instruction_information.index_reg) : 0;
+		unsigned __int64 index_value = !instruction_information.index_reg_invalid ? *(&vcpu->vmexit_info.guest_registers->rax - instruction_information.index_reg) : 0;
 
-		unsigned __int64 segment_base = hv::vmread(GUEST_ES_BASE + (instruction_information.index_reg << 1));
+		index_value = index_value * (1ULL << instruction_information.scaling);
+
+		unsigned __int64 segment_base = hv::vmread(GUEST_ES_BASE + (instruction_information.segment_register << 1));
 
 		unsigned __int64 guest_address = displacement + base_value + index_value + segment_base;
 

@@ -1,6 +1,7 @@
 #include <ntddk.h>
 #include "hypervisor_gateway.h"
 #include "utils.h"
+
 extern void* kernel_code_caves[200];
 
 void* nt_create_file_address;

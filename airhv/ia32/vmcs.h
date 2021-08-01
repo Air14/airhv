@@ -32,7 +32,7 @@ union __vmx_secondary_processor_based_control
         unsigned __int64 intel_pt_uses_guest_physical_address : 1;
         unsigned __int64 use_tsc_scaling : 1;
         unsigned __int64 enable_user_wait_and_pause : 1;
-        unsigned __int64 enablde_enclv_exiting : 1;
+        unsigned __int64 enable_enclv_exiting : 1;
     };
 };
 

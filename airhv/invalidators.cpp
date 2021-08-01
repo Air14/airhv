@@ -66,5 +66,5 @@ void invvpid_single_context_except_global_translations(unsigned __int8 vpid)
 {
 	__invvpid_descriptor descriptor = { 0 };
 	descriptor.vpid = vpid;
-	return __invvpid(INVVPID_SINGLE_EXCEPT_GLOBAL_TRANSLATIONS, NULL);
+	return __invvpid(INVVPID_SINGLE_EXCEPT_GLOBAL_TRANSLATIONS, &descriptor);
 }

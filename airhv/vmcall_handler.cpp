@@ -64,7 +64,7 @@ void vmexit_vmcall_handler(__vcpu* vcpu)
 
 	if (hv::get_guest_cpl() != 0) 
 	{
-		hv::inject_event(EXCEPTION_VECTOR_GENERAL_PROTECTION_FAULT, INTERRUPT_TYPE_HARDWARE_EXCEPTION, 0, 1);
+		hv::inject_interruption(EXCEPTION_VECTOR_GENERAL_PROTECTION_FAULT, INTERRUPT_TYPE_HARDWARE_EXCEPTION, 0, 1);
 		return;
 	}
 

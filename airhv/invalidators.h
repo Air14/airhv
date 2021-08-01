@@ -9,12 +9,8 @@ struct __invept_descriptor
 
 struct __invpcid_descriptor 
 {
-	union
-	{
-		unsigned __int64 pcid : 12;
-		unsigned __int64 reserved : 52;
-	};
-
+	unsigned __int64 pcid : 12;
+	unsigned __int64 reserved : 52;
 	unsigned __int64 linear_address;
 };
 
@@ -41,6 +37,14 @@ enum invvpid_type
 	INVVPID_SINGLE_CONTEXT,
 	INVVPID_ALL_CONTEXTS,
 	INVVPID_SINGLE_EXCEPT_GLOBAL_TRANSLATIONS
+};
+
+enum invpcid_type
+{
+	INVPCID_INVIDUAL_ADDRESS,
+	INVPCID_SINGLE_CONTEXT,
+	INVPCID_ALL_CONTEXTS,
+	INVPCID_ALL_CONTEXTS_EXCEPT_GLOBAL_TRANSLATIONS
 };
 
 /// <summary>

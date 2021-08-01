@@ -90,7 +90,7 @@ namespace hv
 	/// <param name="type"></param>
 	/// <param name="error_code"></param>
 	/// <param name="deliver_error_code"></param>
-	void inject_event(unsigned __int32 vector, unsigned __int32 type, unsigned __int32 error_code, bool deliver_error_code);
+	void inject_interruption(unsigned __int32 vector, unsigned __int32 type, unsigned __int32 error_code, bool deliver_error_code);
 
 	/// <summary>
 	/// Write to reset io port to perform hard reset

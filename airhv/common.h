@@ -4,6 +4,7 @@
 #include "poolmanager.h"
 #include "ia32\exception.h"
 #include "ia32\mtrr.h"
+#include "ia32\rflags.h"
 
 extern "C" size_t __fastcall LDE(const void* lpData, unsigned int size);
 
@@ -82,7 +83,7 @@ struct __vcpu
 
         unsigned __int64 guest_rip;
 
-        unsigned __int64 guest_rflags;
+       __rflags guest_rflags;
 
         unsigned __int64 instruction_length;
 

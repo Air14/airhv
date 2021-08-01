@@ -4,6 +4,7 @@
 #define SET_CPUID_BIT(x, b)            (x = (x) | (1 << b))
 #define CLR_CPUID_BIT(x, b)            ((x) & ~(1 << b))
 
+#define CPUID_EXTENDED_FEATURES           0x00000007
 #define CPUID_HV_VENDOR_AND_MAX_FUNCTIONS 0x40000000
 #define CPUID_HV_INTERFACE                0x40000001
 #define CPUID_PROCESSOR_FEATURES          0x00000001

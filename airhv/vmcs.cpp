@@ -10,7 +10,6 @@
 #include "ia32\cr.h"
 #include "log.h"
 #include "hypervisor_routines.h"
-
 /// <summary>
 /// Derived from Intel Manuals Voulme 3 Section 24.6.2 Table 24-6. Definitions of Primary Processor-Based VM-Execution Controls
 /// </summary>
@@ -38,7 +37,12 @@ void set_primary_controls(__vmx_primary_processor_based_control& primary_control
 	/**
 	* This determines whether executions of INVLPG cause VM exits.
 	*/
+
+#ifdef _MINIMAL
 	primary_controls.invldpg_exiting = false;
+#else
+	primary_controls.invldpg_exiting = true;
+#endif
 
 	/**
 	* This control determines whether executions of MWAIT cause VM exits.
@@ -53,7 +57,11 @@ void set_primary_controls(__vmx_primary_processor_based_control& primary_control
 	/**
 	* This control determines whether executions of RDTSC and RDTSCP cause VM exits.
 	*/
+#ifdef _MINIMAL
+	primary_controls.rdtsc_exiting = false;
+#else
 	primary_controls.rdtsc_exiting = true;
+#endif
 
 	/**
 	* In conjunction with the CR3-target controls (see Section 24.6.7), this control determines
@@ -61,14 +69,22 @@ void set_primary_controls(__vmx_primary_processor_based_control& primary_control
 	* The first processors to support the virtual-machine extensions supported only the 1-setting
 	* of this control.
 	*/
+#ifdef _MINIMAL
+	primary_controls.cr3_load_exiting = false;
+#else
 	primary_controls.cr3_load_exiting = true;
+#endif
 
 	/**
 	* This control determines whether executions of MOV from CR3 cause VM exits.
 	* The first processors to support the virtual-machine extensions supported only the 1-setting
 	* of this control.
 	*/
+#ifdef _MINIMAL
+	primary_controls.cr3_store_exiting = false;
+#else
 	primary_controls.cr3_store_exiting = true;
+#endif
 
 	/**
 	* This control determines whether executions of MOV to CR8 cause VM exits.
@@ -95,7 +111,11 @@ void set_primary_controls(__vmx_primary_processor_based_control& primary_control
 	/**
 	* This control determines whether executions of MOV DR cause VM exits.
 	*/
+#ifdef _MINIMAL
+	primary_controls.mov_dr_exiting = false;
+#else
 	primary_controls.mov_dr_exiting = true;
+#endif
 
 	/**
 	* This control determines whether executions of I/O instructions (IN, INS/INSB/INSW/INSD, OUT,
@@ -109,7 +129,11 @@ void set_primary_controls(__vmx_primary_processor_based_control& primary_control
 	For this control, “0” means “do not use I/O bitmaps” and “1” means “use I/O bitmaps.” If the I/O
 	bitmaps are used, the setting of the “unconditional I/O exiting” control is ignored
 	*/
+#ifdef _MINIMAL
+	primary_controls.use_io_bitmaps = false;
+#else
 	primary_controls.use_io_bitmaps = true;
+#endif
 
 	/**
 	* If this control is 1, the monitor trap flag debugging feature is enabled. See Section 25.5.2.
@@ -164,7 +188,11 @@ void set_secondary_controls(__vmx_secondary_processor_based_control& secondary_c
 	* This control determines whether executions of LGDT, LIDT, LLDT, LTR, SGDT, SIDT, SLDT, and
 	* STR cause VM exits.
 	*/
+#ifdef _MINIMAL
 	secondary_controls.descriptor_table_exiting = false;
+#else
+	secondary_controls.descriptor_table_exiting = true;
+#endif
 
 	/**
 	* If this control is 0, any execution of RDTSCP causes an invalid-opcode exception (#UD).
@@ -186,7 +214,11 @@ void set_secondary_controls(__vmx_secondary_processor_based_control& secondary_c
 	/**
 	* This control determines whether executions of WBINVD cause VM exits.
 	*/
+#ifdef _MINIMAL
+	secondary_controls.wbinvd_exiting = false;
+#else
 	secondary_controls.wbinvd_exiting = true;
+#endif
 
 	/**
 	* This control determines whether guest software may run in unpaged protected mode or in real-
@@ -215,12 +247,16 @@ void set_secondary_controls(__vmx_secondary_processor_based_control& secondary_c
 	/**
 	* This control determines whether executions of RDRAND cause VM exits.
 	*/
+#ifdef _MINIMAL
+	secondary_controls.rdrand_exiting = false;
+#else
 	secondary_controls.rdrand_exiting = true;
+#endif
 
 	/**
 	* If this control is 0, any execution of INVPCID causes a #UD.
 	*/
-	secondary_controls.enable_invpcid = true; 
+	secondary_controls.enable_invpcid = true;
 
 	/**
 	* Setting this control to 1 enables use of the VMFUNC instruction in VMX non-root operation. See
@@ -243,7 +279,11 @@ void set_secondary_controls(__vmx_secondary_processor_based_control& secondary_c
 	/**
 	* This control determines whether executions of RDSEED cause VM exits.
 	*/
+#ifdef _MINIMAL
+	secondary_controls.rdseed_exiting = false;
+#else
 	secondary_controls.rdseed_exiting = true;
+#endif
 
 	/**
 	* If this control is 1, an access to a guest-physical address that sets an EPT dirty bit first adds an
@@ -262,7 +302,7 @@ void set_secondary_controls(__vmx_secondary_processor_based_control& secondary_c
 	* was in VMX non-root operation and omits a VMCS packet from any PSB+ produced in VMX non-
 	* root operation (see Chapter 35).
 	*/
-	secondary_controls.conceal_vmx_from_pt = false;
+	secondary_controls.conceal_vmx_from_pt = true;
 
 	/**
 	* If this control is 0, any execution of XSAVES or XRSTORS causes a #UD.
@@ -305,7 +345,7 @@ void set_secondary_controls(__vmx_secondary_processor_based_control& secondary_c
 	* If this control is 1, executions of ENCLV consult the ENCLV-exiting bitmap to determine whether
 	* the instruction causes a VM exit. See Section 24.6.17 and Section 25.1.3.
 	*/
-	secondary_controls.enablde_enclv_exiting = false;
+	secondary_controls.enable_enclv_exiting = false;
 }
 
 /// <summary>
@@ -638,8 +678,8 @@ unsigned __int32 ajdust_controls(unsigned __int32 ctl, unsigned __int32 msr)
 /// <param name="guest_rsp"></param>
 void fill_vmcs(__vcpu* vcpu, void* guest_rsp)
 {
-	__pseudo_descriptor gdtr = { 0 };
-	__pseudo_descriptor idtr = { 0 };
+	__pseudo_descriptor64 gdtr = { 0 };
+	__pseudo_descriptor64 idtr = { 0 };
 	__exception_bitmap exception_bitmap = { 0 };
 	__vmx_basic_msr vmx_basic = { 0 };
 	__vmx_entry_control entry_controls = { 0 };
@@ -668,7 +708,10 @@ void fill_vmcs(__vcpu* vcpu, void* guest_rsp)
 	// We want to vmexit on every io and msr access
 	memset(vcpu->vcpu_bitmaps.io_bitmap_a, 0xff, PAGE_SIZE);
 	memset(vcpu->vcpu_bitmaps.io_bitmap_b, 0xff, PAGE_SIZE);
+
+#ifndef _MINIMAL
 	memset(vcpu->vcpu_bitmaps.msr_bitmap, 0xff, PAGE_SIZE);
+#endif
 
 	//
 	// Msr bitmap controls which operation on which msr
@@ -761,17 +804,22 @@ void fill_vmcs(__vcpu* vcpu, void* guest_rsp)
 	hv::vmwrite<unsigned __int64>(HOST_RSP, (unsigned __int64)vcpu->vmm_stack + VMM_STACK_SIZE);
 	hv::vmwrite<void*>(HOST_RIP, vmm_entrypoint);
 
-	// MSRS
-	hv::vmwrite<unsigned __int64>(GUEST_VMCS_LINK_POINTER, ~0ULL);
+	// MSRS Guest
 	hv::vmwrite<unsigned __int64>(GUEST_DEBUG_CONTROL, __readmsr(IA32_DEBUGCTL));
 	hv::vmwrite<unsigned __int64>(GUEST_SYSENTER_CS, __readmsr(IA32_SYSENTER_CS));
 	hv::vmwrite<unsigned __int64>(GUEST_SYSENTER_ESP, __readmsr(IA32_SYSENTER_ESP));
 	hv::vmwrite<unsigned __int64>(GUEST_SYSENTER_EIP, __readmsr(IA32_SYSENTER_EIP));
+	hv::vmwrite<unsigned __int64>(GUEST_EFER, __readmsr(IA32_EFER));
+
+	// MSRS Host
 	hv::vmwrite<unsigned __int64>(HOST_SYSENTER_CS, __readmsr(IA32_SYSENTER_CS));
 	hv::vmwrite<unsigned __int64>(HOST_SYSENTER_ESP, __readmsr(IA32_SYSENTER_ESP));
 	hv::vmwrite<unsigned __int64>(HOST_SYSENTER_EIP, __readmsr(IA32_SYSENTER_EIP));
+	hv::vmwrite<unsigned __int64>(HOST_EFER, __readmsr(IA32_EFER));
 
 	// Features
+	hv::vmwrite<unsigned __int64>(GUEST_VMCS_LINK_POINTER, ~0ULL);
+
 	hv::vmwrite<unsigned __int64>(CONTROL_EXCEPTION_BITMAP, exception_bitmap.all);
 
 	if (primary_controls.use_msr_bitmaps == true)

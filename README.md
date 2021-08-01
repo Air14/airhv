@@ -4,7 +4,7 @@ airhv is a simple hypervisor based on Intel VT-x mainly focused on ept hooking
 ## Features
 * Ept support with mapping of 2MB pages (splitted dynamicly to 4KB pages if needed)
 * Ability to run in VMWare which is using few IO ports for communication between vmtools and VMWare hypervisor
-* Ability to handle various VM-exit cases: `CPUID` `RDTSC` `RDTSCP` `RDRAND` `RDSEED` `WBINVD/INVD` `IN/OUT` `XSETBV` `RDMSR` `WRMSR` `INVPCID` `MOV DR` `CR ACCESS` `EXCEPTIONS/NMI` `VMCALL`
+* Ability to handle various VM-exit cases: `CPUID` `RDTSC` `RDTSCP` `RDRAND` `RDSEED` `WBINVD/INVD` `IN/OUT` `XSETBV` `RDMSR` `WRMSR` `INVPCID` `MOV DR` `CR ACCESS` `EXCEPTIONS/NMI` `VMCALL` `INVLPG`  `GDTR/IDTR ACCESS` `LDTR/TR ACCESS`
 * Ability to perform inline hooking via ept
 * Included simple driver (airhvctrl) which is communicating with hypervisor via `VMCALL` to hook syscall (via ept).
 It hooks NtCreateFile and every time user when tries to create a file named test.txt it prevents user from doing that.
