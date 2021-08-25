@@ -21,8 +21,8 @@ namespace ept
 		__mtrr_cap_reg mtrr_cap = { 0 };
 		__mtrr_physbase_reg current_phys_base = { 0 };
 		__mtrr_physmask_reg current_phys_mask = { 0 };
+		__mtrr_def_type mtrr_def_type = { 0 };
 		__mtrr_range_descriptor* descriptor;
-		unsigned long bits_in_mask = 0;
 
 		//
 		// The memory type range registers (MTRRs) provide a mechanism for associating the memory types (see Section
@@ -33,6 +33,83 @@ namespace ept
 		//
 
 		mtrr_cap.all = __readmsr(IA32_MTRRCAP);
+		mtrr_def_type.all = __readmsr(IA32_MTRR_DEF_TYPE);
+
+		if (mtrr_def_type.mtrr_enabled == false)
+		{
+			g_vmm_context->ept_state->default_memory_type = MEMORY_TYPE_UNCACHEABLE;
+			return;
+		}
+
+		g_vmm_context->ept_state->default_memory_type = mtrr_def_type.memory_type;
+
+		if (mtrr_cap.smrr_support == true)
+		{
+			current_phys_base.all = __readmsr(IA32_SMRR_PHYSBASE);
+			current_phys_mask.all = __readmsr(IA32_SMRR_PHYSMASK);
+
+			if (current_phys_mask.valid && current_phys_base.type != mtrr_def_type.memory_type)
+			{
+				descriptor = &g_vmm_context->ept_state->memory_range[g_vmm_context->ept_state->enabled_memory_ranges++];
+				descriptor->physcial_base_address = current_phys_base.physbase << PAGE_SHIFT;
+
+				unsigned long bits_in_mask = 0;
+				_BitScanForward64(&bits_in_mask, current_phys_mask.physmask << PAGE_SHIFT);
+
+				descriptor->physcial_end_address = descriptor->physcial_base_address + ((1ULL << bits_in_mask) - 1ULL);
+				descriptor->memory_type = (unsigned __int8)current_phys_base.type;
+				descriptor->fixed_range = false;
+			}
+		}
+
+		if (mtrr_cap.fixed_range_support == true && mtrr_def_type.fixed_range_mtrr_enabled)
+		{
+			constexpr auto k64_base = 0x0;
+			constexpr auto k64_size = 0x10000;
+			constexpr auto k16_base = 0x80000;
+			constexpr auto k16_size = 0x4000;
+			constexpr auto k4_base = 0xC0000;
+			constexpr auto k4_size = 0x1000;
+
+			__mtrr_fixed_range_type k64_types = { __readmsr(IA32_MTRR_FIX64K_00000) };
+
+			for (unsigned int i = 0; i < 8; i++)
+			{
+				descriptor = &g_vmm_context->ept_state->memory_range[g_vmm_context->ept_state->enabled_memory_ranges++];
+				descriptor->memory_type = k64_types.types[i];
+				descriptor->physcial_base_address = k64_base + (k64_size * i);
+				descriptor->physcial_end_address = k64_base + (k64_size * i) + (k64_size - 1);
+				descriptor->fixed_range = true;
+			}
+
+			for (unsigned int i = 0; i < 2; i++)
+			{
+				__mtrr_fixed_range_type k16_types = { __readmsr(IA32_MTRR_FIX16K_80000 + i) };
+
+				for (unsigned int j = 0; j < 8; j++)
+				{
+					descriptor = &g_vmm_context->ept_state->memory_range[g_vmm_context->ept_state->enabled_memory_ranges++];
+					descriptor->memory_type = k16_types.types[j];
+					descriptor->physcial_base_address = (k16_base + (i * k16_size * 8)) + (k16_size * j);
+					descriptor->physcial_end_address = (k16_base + (i * k16_size * 8)) + (k16_size * j) + (k16_size - 1);
+					descriptor->fixed_range = true;
+				}
+			}
+
+			for (unsigned int i = 0; i < 8; i++)
+			{
+				__mtrr_fixed_range_type k4_types = { __readmsr(IA32_MTRR_FIX4K_C0000 + i) };
+
+				for (unsigned int j = 0; j < 8; j++)
+				{
+					descriptor = &g_vmm_context->ept_state->memory_range[g_vmm_context->ept_state->enabled_memory_ranges++];
+					descriptor->memory_type = k4_types.types[j];
+					descriptor->physcial_base_address = (k4_base + (i * k4_size * 8)) + (k4_size * j);
+					descriptor->physcial_end_address = (k4_base + (i * k4_size * 8)) + (k4_size * j) + (k4_size - 1);
+					descriptor->fixed_range = true;
+				}
+			}
+		}
 
 		//
 		// Indicates the number of variable ranges
@@ -49,7 +126,7 @@ namespace ept
 
 			//
 			// If range is enabled
-			if (current_phys_mask.valid)
+			if (current_phys_mask.valid && current_phys_base.type != mtrr_def_type.memory_type)
 			{
 				descriptor = &g_vmm_context->ept_state->memory_range[g_vmm_context->ept_state->enabled_memory_ranges++];
 
@@ -62,6 +139,7 @@ namespace ept
 				// Index of first bit set to one determines how much do we have to bit shift to get size of range
 				// physmask is truncated by 12 bits so we have to left shift it by 12
 				//
+				unsigned long bits_in_mask = 0;
 				_BitScanForward64(&bits_in_mask, current_phys_mask.physmask << PAGE_SHIFT);
 
 				//
@@ -73,52 +151,91 @@ namespace ept
 				// Get memory type of range
 				//
 				descriptor->memory_type = (unsigned __int8)current_phys_base.type;
-
-				//
-				// WB memory type is our default memory type so we don't have to store this range
-				//
-				if (descriptor->memory_type == MEMORY_TYPE_WRITE_BACK)
-				{
-					g_vmm_context->ept_state->enabled_memory_ranges--;
-				}
+				descriptor->fixed_range = false;
 			}
 		}
 	}
 
 	/// <summary>
+	/// Get page cache memory type
+	/// </summary>
+	/// <param name="pfn"></param>
+	/// <param name="is_large_page"></param>
+	/// <returns></returns>
+	unsigned __int8 get_memory_type(unsigned __int64 pfn, bool is_large_page)
+	{
+		unsigned __int64 page_start_address = is_large_page == true ? pfn * LARGE_PAGE_SIZE : pfn * PAGE_SIZE;
+		unsigned __int64 page_end_address = is_large_page == true ? (pfn * LARGE_PAGE_SIZE) + (LARGE_PAGE_SIZE - 1) : (pfn * PAGE_SIZE) + (PAGE_SIZE - 1);
+		unsigned __int8 memory_type = g_vmm_context->ept_state->default_memory_type;
+
+		for (unsigned int i = 0; i < g_vmm_context->ept_state->enabled_memory_ranges; i++)
+		{
+			if (page_start_address >= g_vmm_context->ept_state->memory_range[i].physcial_base_address &&
+				page_end_address <= g_vmm_context->ept_state->memory_range[i].physcial_end_address)
+			{
+				memory_type = g_vmm_context->ept_state->memory_range[i].memory_type;
+
+				if (g_vmm_context->ept_state->memory_range[i].fixed_range == true)
+					break;
+
+				if (memory_type == MEMORY_TYPE_UNCACHEABLE)
+					break;
+			}
+		}
+
+		return memory_type;
+	}
+
+	/// <summary>
+	/// Check if potential large page doesn't land on two or more different cache memory types
+	/// </summary>
+	/// <param name="pfn"></param>
+	/// <returns></returns>
+	bool is_valid_for_large_page(unsigned __int64 pfn)
+	{
+		unsigned __int64 page_start_address = pfn * LARGE_PAGE_SIZE;
+		unsigned __int64 page_end_address = (pfn * LARGE_PAGE_SIZE) + (LARGE_PAGE_SIZE - 1);
+
+		for (unsigned int i = 0; i < g_vmm_context->ept_state->enabled_memory_ranges; i++)
+		{
+			if (page_start_address <= g_vmm_context->ept_state->memory_range[i].physcial_end_address &&
+				page_end_address > g_vmm_context->ept_state->memory_range[i].physcial_end_address)
+				return false;
+
+			else if (page_start_address < g_vmm_context->ept_state->memory_range[i].physcial_base_address &&
+					 page_end_address >= g_vmm_context->ept_state->memory_range[i].physcial_base_address)
+				return false;
+		}
+
+		return true;
+	}
+
+	/// <summary> 
 	/// Setup page memory type
 	/// </summary>
 	/// <param name="entry"> Pointer to pml2 entry </param>
 	/// <param name="pfn"> Page frame number </param>
-	void setup_pml2_entry(__ept_pde& entry, unsigned __int64 pfn)
+	bool setup_pml2_entry(__ept_pde& entry, unsigned __int64 pfn)
 	{
 		entry.page_directory_entry.physical_address = pfn;
-
-		unsigned __int64 page_address = pfn * LARGE_PAGE_SIZE;
-
-		if (pfn == 0)
+		
+		if (is_valid_for_large_page(pfn) == true)
 		{
-			entry.page_directory_entry.memory_type = MEMORY_TYPE_UNCACHEABLE;
-			return;
+			entry.page_directory_entry.memory_type = get_memory_type(pfn, true);
+			return true;
 		}
 
-		unsigned __int64 memory_type = MEMORY_TYPE_WRITE_BACK;
-		for (unsigned __int64 i = 0; i < g_vmm_context->ept_state->enabled_memory_ranges; i++)
+		else
 		{
-			if (page_address <= g_vmm_context->ept_state->memory_range[i].physcial_end_address)
+			void* split_buffer = pool_manager::request_pool<void*>(pool_manager::INTENTION_SPLIT_PML2, true, sizeof(__ept_dynamic_split));
+			if (split_buffer == nullptr)
 			{
-				if ((page_address + LARGE_PAGE_SIZE - 1) >= g_vmm_context->ept_state->memory_range[i].physcial_base_address)
-				{
-					memory_type = g_vmm_context->ept_state->memory_range[i].memory_type;
-					if (memory_type == MEMORY_TYPE_UNCACHEABLE)
-					{
-						break;
-					}
-				}
+				LogError("Failed to allocate split buffer");
+				return false;
 			}
-		}
 
-		entry.page_directory_entry.memory_type = memory_type;
+			return split_pml2(split_buffer, pfn * LARGE_PAGE_SIZE);
+		}
 	}
 
 	/// <summary>
@@ -136,6 +253,7 @@ namespace ept
 			LogError("Failed to allocate memory for PageTable");
 			return false;
 		}
+
 		__vmm_ept_page_table* page_table = g_vmm_context->ept_state->ept_page_table;
 		RtlSecureZeroMemory(page_table, sizeof(__vmm_ept_page_table));
 
@@ -156,9 +274,7 @@ namespace ept
 		__stosq((unsigned __int64*)&page_table->pml3[0], pdpte_template.all, 512);
 
 		for (int i = 0; i < 512; i++)
-		{
 			page_table->pml3[i].physical_address = GET_PFN(MmGetPhysicalAddress(&page_table->pml2[i][0]).QuadPart);
-		}
 
 		__ept_pde pde_template = { 0 };
 
@@ -171,12 +287,9 @@ namespace ept
 		__stosq((unsigned __int64*)&page_table->pml2[0], pde_template.all, 512 * 512);
 
 		for (int i = 0; i < 512; i++)
-		{
 			for (int j = 0; j < 512; j++)
-			{
-				setup_pml2_entry(page_table->pml2[i][j], (i * 512) + j);
-			}
-		}
+				if(setup_pml2_entry(page_table->pml2[i][j], (i * 512) + j) == false)
+					return false;
 
 		return true;
 	}
@@ -189,18 +302,14 @@ namespace ept
 	{
 		__eptp* ept_pointer = allocate_pool<__eptp*>(PAGE_SIZE);
 		if (ept_pointer == NULL)
-		{
 			return false;
-		}
+
 		RtlSecureZeroMemory(ept_pointer, PAGE_SIZE);
 
 		if (create_ept_page_table() == false)
-		{
 			return false;
-		}
 
-		// What is memory write back? -> https://stackoverflow.com/questions/45623007/wc-vs-wb-memory-other-types-of-memory-on-x86-64
-		ept_pointer->memory_type = MEMORY_TYPE_WRITE_BACK;
+		ept_pointer->memory_type = g_vmm_context->ept_state->default_memory_type;
 
 		// Indicates 4 level paging
 		ept_pointer->page_walk_length = 3;
@@ -302,7 +411,9 @@ namespace ept
 		__stosq((unsigned __int64*)&new_split->pml1[0], entry_template.all, 512);
 		for (int i = 0; i < 512; i++)
 		{
-			new_split->pml1[i].physical_address = ((entry->page_directory_entry.physical_address * LARGE_PAGE_SIZE) >> PAGE_SHIFT) + i;
+			unsigned __int64 pfn = ((entry->page_directory_entry.physical_address * LARGE_PAGE_SIZE) >> PAGE_SHIFT) + i;
+			new_split->pml1[i].physical_address = pfn;
+			new_split->pml1[i].ept_memory_type = get_memory_type(pfn, false);
 		}
 
 		__ept_pde new_entry = { 0 };
@@ -588,7 +699,7 @@ namespace ept
 		if (is_page_splitted(physical_address) == false)
 		{
 			void* split_buffer = pool_manager::request_pool<void*>(pool_manager::INTENTION_SPLIT_PML2, true, sizeof(__ept_dynamic_split));
-			if (split_buffer == NULL)
+			if (split_buffer == nullptr)
 			{
 				LogError("There is no preallocated pool for split");
 				return false;
@@ -683,7 +794,7 @@ namespace ept
 		// Track all hooked pages
 		InsertHeadList(&g_vmm_context->ept_state->hooked_page_list, &hooked_page_info->hooked_page_list);
 
-		//swap_pml1_and_invalidate_tlb(target_page, changed_entry, INVEPT_SINGLE_CONTEXT);
+		invept_single_context(g_vmm_context->ept_state->ept_pointer->all);
 
 		return true;
 	}

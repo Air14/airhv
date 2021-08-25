@@ -364,4 +364,12 @@ namespace ept
 	/// <param name="entry_address"> Pointer to page table entry which we want to change </param>
 	/// <param name="entry_value"> Pointer to page table entry which we want use to change </param>
 	void swap_pml1(__ept_pte* entry_address, __ept_pte entry_value);
+
+	/// <summary>
+	/// Split pml2 into 512 pml1 entries (From one 2MB page to 512 4KB pages)
+	/// </summary>
+	/// <param name="pre_allocated_buffer"> Pre allocated buffer for split </param>
+	/// <param name="physical_address"></param>
+	/// <returns> status </returns>
+	bool split_pml2(void* pre_allocated_buffer, unsigned __int64 physical_address);
 }

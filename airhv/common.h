@@ -45,8 +45,9 @@ struct __vmexit_guest_registers
 struct __ept_state
 {
     LIST_ENTRY hooked_page_list;
-    __mtrr_range_descriptor memory_range[9];
+    __mtrr_range_descriptor memory_range[100];
     unsigned __int32 enabled_memory_ranges;
+    unsigned __int8 default_memory_type;
     __eptp* ept_pointer;
     __vmm_ept_page_table* ept_page_table;
     volatile long pml_lock;
