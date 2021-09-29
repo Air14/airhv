@@ -480,7 +480,7 @@ void vmexit_cpuid_handler(__vcpu* vcpu)
 	switch (vcpu->vmexit_info.guest_registers->rax)
 	{
 		case CPUID_PROCESSOR_FEATURES:
-			cpuid_reg.cpuid_eax_01.feature_information_ecx.hypervisor_present = g_vmm_context->hv_presence; // Hypervisor present bit
+			cpuid_reg.cpuid_eax_01.feature_information_ecx.hypervisor_present = 0; // Hypervisor present bit
 			break;
 		
 		case CPUID_HV_VENDOR_AND_MAX_FUNCTIONS:
