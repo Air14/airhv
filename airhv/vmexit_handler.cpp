@@ -516,6 +516,11 @@ void vmexit_cpuid_handler(__vcpu* vcpu)
 	vcpu->vmexit_info.guest_registers->rdx = cpuid_reg.edx;
 
 	adjust_rip(vcpu);
+	
+	if (vcpu->vmexit_info.guest_rflags.trap_flag) {
+		hv::inject_interruption(EXCEPTION_VECTOR_SINGLE_STEP, INTERRUPT_TYPE_HARDWARE_EXCEPTION, 0, false);
+		hv::vmwrite(VM_EXIT_INSTRUCTION_LENGTH, 2);
+	}
 }
 
 /// <summary>
@@ -602,7 +607,7 @@ void vmexit_mov_dr_handler(__vcpu* vcpu)
 	//
 	// Moves the contents of a debug register (DR0, DR1, DR2, DR3, DR4, DR5, DR6, or DR7) to a general-purpose register or vice versa.
 	// The operand size for these instructions is always 32 bits in non-64-bit modes, regardless of the operand-size attribute. 
-	// (See Section 17.2, “Debug Registers”, of the Intel® 64 and IA-32 Architectures Software Developer’s Manual, Volume 3A, 
+	// (See Section 17.2, Â“Debug RegistersÂ”, of the IntelÂ® 64 and IA-32 Architectures Software DeveloperÂ’s Manual, Volume 3A, 
 	// for a detailed description of the flags and fields in the debug registers.)
 	//
 
@@ -923,7 +928,7 @@ void vmexit_rdrand_handler(__vcpu* vcpu)
 	// will be returned as zeros for the specified width. All other flags are forced to 0 in either situation. 
 	// Software must check the state of CF=1 for determining if a valid random value has been returned, 
 	// otherwise it is expected to loop and retry execution of RDRAND 
-	// (see Intel® 64 and IA-32 Architectures Software Developer’s Manual, Volume 1, Section 7.3.17, “Random Number Generator Instructions”).
+	// (see IntelÂ® 64 and IA-32 Architectures Software DeveloperÂ’s Manual, Volume 1, Section 7.3.17, Â“Random Number Generator InstructionsÂ”).
 	// This instruction is available at all privilege levels.
 	//
 	switch (instruction_information.operand_size)
@@ -1068,7 +1073,7 @@ void vmexit_xsetbv_handler(__vcpu* vcpu)
 void vmexit_invd_handler(__vcpu* vcpu)
 {
 	//
-	// Invalidates (flushes) the processor’s internal caches and issues a special-function bus cycle that directs 
+	// Invalidates (flushes) the processorÂ’s internal caches and issues a special-function bus cycle that directs 
 	// external caches to also flush themselves. Data held in internal caches is not written back to main memory.
 	// After executing this instruction, the processor does not wait for the external caches to complete their flushing operation before 
 	// proceeding with instruction execution.It is the responsibility of hardware to respond to the cache flush signal.
@@ -1096,7 +1101,7 @@ void vmexit_invd_handler(__vcpu* vcpu)
 void vmexit_rdtscp_handler(__vcpu* vcpu)
 {
 	//
-	// Reads the current value of the processor’s time-stamp counter (a 64-bit MSR) into the EDX:EAX registers
+	// Reads the current value of the processorÂ’s time-stamp counter (a 64-bit MSR) into the EDX:EAX registers
 	// and also reads the value of the IA32_TSC_AUX MSR (address C0000103H) into the ECX register.
 	// The EDX register is loaded with the high-order 32 bits of the IA32_TSC MSR; 
 	// the EAX register is loaded with the low-order 32 bits of the IA32_TSC MSR; 
@@ -1211,7 +1216,7 @@ void vmexit_cr_handler(__vcpu* vcpu)
 	// Moves the contents of a control register (CR0, CR2, CR3, CR4, or CR8) 
 	// to a general-purpose register or the contents of a general purpose register to a control register.
 	// The operand size for these instructions is always 32 bits in non-64-bit modes, regardless of the operand-size attribute.
-	// (See “Control Registers” in Chapter 2 of the Intel® 64 and IA-32 Architectures Software Developer’s Manual,
+	// (See Â“Control RegistersÂ” in Chapter 2 of the IntelÂ® 64 and IA-32 Architectures Software DeveloperÂ’s Manual,
 	// Volume 3A, for a detailed description of the flags and fields in the control registers.) 
 	// This instruction can be executed only when the current privilege level is 0. 
 	//
@@ -1327,8 +1332,8 @@ void vmexit_cr_handler(__vcpu* vcpu)
 		// It is allowed to be executed in real-address mode to allow initialization for protected mode.
 		// The processor sets the TS flag every time a task switch occurs.
 		// The flag is used to synchronize the saving of FPU context in multitasking applications.
-		// See the description of the TS flag in the section titled “Control Registers” 
-		// in Chapter 2 of the Intel® 64 and IA - 32 Architectures Software Developer’s Manual, Volume 3A, for more information about this flag.
+		// See the description of the TS flag in the section titled Â“Control RegistersÂ” 
+		// in Chapter 2 of the IntelÂ® 64 and IA - 32 Architectures Software DeveloperÂ’s Manual, Volume 3A, for more information about this flag.
 		//
 		case CR_ACCESS_CLTS:
 		{
