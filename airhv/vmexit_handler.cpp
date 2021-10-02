@@ -1294,19 +1294,19 @@ void vmexit_cr_handler(__vcpu* vcpu)
 			{
 				case 0:
 				{
-					__vmx_vmread(GUEST_CR0, register_pointer);
+					*register_pointer = hv::vmread(GUEST_CR0);
 					break;
 				}
 
 				case 3:
 				{
-					__vmx_vmread(GUEST_CR3, register_pointer);
+					*register_pointer = hv::vmread(GUEST_CR3);
 					break;
 				}
 
 				case 4:
 				{
-					__vmx_vmread(GUEST_CR4, register_pointer);
+					*register_pointer = hv::vmread(GUEST_CR4);
 					break;
 				}
 
@@ -1450,5 +1450,10 @@ bool vmexit_handler(__vmexit_guest_registers* guest_registers)
 /// </summary>
 void adjust_rip(__vcpu* vcpu)
 {
-	__vmx_vmwrite(GUEST_RIP, vcpu->vmexit_info.guest_rip + vcpu->vmexit_info.instruction_length);
+	hv::vmwrite(GUEST_RIP, vcpu->vmexit_info.guest_rip + vcpu->vmexit_info.instruction_length);
+	if (vcpu->vmexit_info.guest_rflags.trap_flag)
+	{
+		hv::inject_interruption(EXCEPTION_VECTOR_SINGLE_STEP, INTERRUPT_TYPE_HARDWARE_EXCEPTION, 0, false);
+		hv::vmwrite(CONTROL_VM_ENTRY_INSTRUCTION_LENGTH, vcpu->vmexit_info.instruction_length);
+	}
 }

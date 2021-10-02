@@ -136,7 +136,7 @@ bool init_vmcs(__vcpu* vcpu)
 	}
 
 	vcpu->vmcs_physical = MmGetPhysicalAddress(vcpu->vmcs).QuadPart;
-	if (vcpu->vmcs == NULL)
+	if (vcpu->vmcs_physical == NULL)
 	{
 		LogError("Could not get physical address of vmcs");
 		return false;
