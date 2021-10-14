@@ -165,4 +165,38 @@ union __vmx_exit_control
     };
 };
 
+union __vmx_pending_debug_exceptions 
+{
+    unsigned __int64 all;
+    struct
+    {
+        unsigned __int64 b0 : 1;
+        unsigned __int64 b1 : 1;
+        unsigned __int64 b2 : 1;
+        unsigned __int64 b3 : 1;
+        unsigned __int64 reserved1 : 8;
+        unsigned __int64 enabled_bp : 1;
+        unsigned __int64 reserved2 : 1;
+        unsigned __int64 bs : 1;
+        unsigned __int64 reserved3 : 1;
+        unsigned __int64 rtm : 1;
+        unsigned __int64 reserved4 : 47;
+    };
+
+};
+
+union __vmx_interruptibility_state
+{
+    unsigned __int64 all;
+    struct
+    {
+        unsigned __int64 blocking_by_sti : 1;
+        unsigned __int64 blocking_by_mov_ss : 1;
+        unsigned __int64 blocking_by_smi : 1;
+        unsigned __int64 blocking_by_nmi : 1;
+        unsigned __int64 enclave_interruption : 1;
+        unsigned __int64 reserved : 27;
+    };
+};
+
 void fill_vmcs(__vcpu* vcpu, void* guest_rsp);

@@ -18,6 +18,7 @@
 #include "invalidators.h"
 #include "xsave.h"
 #include "ia32\segment.h"
+#include "ia32\vmcs.h"
 
 void vmexit_ept_violation_handler(__vcpu* vcpu);
 void vmexit_unimplemented(__vcpu* vcpu);
@@ -1453,7 +1454,14 @@ void adjust_rip(__vcpu* vcpu)
 	hv::vmwrite(GUEST_RIP, vcpu->vmexit_info.guest_rip + vcpu->vmexit_info.instruction_length);
 	if (vcpu->vmexit_info.guest_rflags.trap_flag)
 	{
-		hv::inject_interruption(EXCEPTION_VECTOR_SINGLE_STEP, INTERRUPT_TYPE_HARDWARE_EXCEPTION, 0, false);
-		hv::vmwrite(CONTROL_VM_ENTRY_INSTRUCTION_LENGTH, vcpu->vmexit_info.instruction_length);
+		__vmx_pending_debug_exceptions pending_debug = { hv::vmread(GUEST_PENDING_DEBUG_EXCEPTION) };
+		__vmx_interruptibility_state interruptibility = { hv::vmread(GUEST_INTERRUPTIBILITY_STATE) };
+
+		pending_debug.bs = true;
+		hv::vmwrite(GUEST_PENDING_DEBUG_EXCEPTION, pending_debug.all);
+
+		interruptibility.blocking_by_sti = false;
+		interruptibility.blocking_by_mov_ss = false;
+		hv::vmwrite(GUEST_INTERRUPTIBILITY_STATE, interruptibility.all);
 	}
 }

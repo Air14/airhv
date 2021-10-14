@@ -86,7 +86,7 @@ void vmexit_vmcall_handler(__vcpu* vcpu)
 		{
 			 unsigned __int64 old_cr3 = hv::swap_context();
 
-			ept::hook_function((void*)vmcall_parameter1, (void*)vmcall_parameter2, (void*)vmcall_parameter3, (void**)vmcall_parameter4);
+			status = ept::hook_function((void*)vmcall_parameter1, (void*)vmcall_parameter2, (void*)vmcall_parameter3, (void**)vmcall_parameter4);
 
 			hv::restore_context(old_cr3);
 
