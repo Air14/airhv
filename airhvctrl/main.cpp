@@ -1,6 +1,7 @@
 #include <ntddk.h>
 #include "hypervisor_gateway.h"
 #include "utils.h"
+#include "log.h"
 
 extern void* kernel_code_caves[200];
 
@@ -110,16 +111,29 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT driver_object, PCUNICODE_STRING reg)
 	RtlInitUnicodeString(&routine_name,L"NtCreateFile");
 
 	// Find code caves in ntoskrnl.exe
-	find_code_caves();
+	if (!find_code_caves())
+	{
+		LogError("Couldn't find kernel base address");
+		return STATUS_UNSUCCESSFUL;
+	}
 
 	// Get address of NtCreateFile syscall
 	nt_create_file_address = MmGetSystemRoutineAddress(&routine_name);
+	if (!nt_create_file_address)
+	{
+		LogError("Couldn't find NtCreateFile address");
+		return STATUS_UNSUCCESSFUL;
+	}
 
 	// 14 bytes hook using absolute jmp
 	//hvgt::hook_function(nt_create_file_address, hooked_nt_create_file, (void**)&original_nt_create_file);
 
 	// 5 bytes hook using relative jmp and code cave
-	hvgt::hook_function(nt_create_file_address, hooked_nt_create_file, kernel_code_caves[0], (void**)&original_nt_create_file);
+	if (!hvgt::hook_function(nt_create_file_address, hooked_nt_create_file, kernel_code_caves[0], (void**)&original_nt_create_file))
+	{
+		LogError("Couldn't hook NtCreateFile");
+		return STATUS_UNSUCCESSFUL;
+	}
 
 	// Send information to hypervisor to allocate new pools
 	hvgt::send_irp_perform_allocation();

@@ -67,5 +67,5 @@ bool find_code_caves()
 		}
 	}
 
-	return TRUE;
+	return true;
 }
