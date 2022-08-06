@@ -45,7 +45,7 @@ bool find_code_caves()
 	unsigned __int64 kernel_text_section_size = 0;
 	void* kernel_text_section_base = 0;
 
-	if (get_kernel_module("ntoskrnl.exe", kernel_text_section_size, kernel_text_section_base) == false)
+	if (get_kernel_module("ntoskrnl.exe", kernel_text_section_size, kernel_text_section_base) == false || !kernel_text_section_size || !kernel_text_section_base)
 		return false;
 
 	kernel_text_section_base = (void*)((unsigned __int64)kernel_text_section_base + 0x1000);
