@@ -1,4 +1,4 @@
-#include <ntddk.h>
+#include <ntifs.h>
 #include "hypervisor_gateway.h"
 #include "utils.h"
 #include "log.h"

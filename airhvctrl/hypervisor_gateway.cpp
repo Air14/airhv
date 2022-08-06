@@ -1,4 +1,4 @@
-#include <ntddk.h>
+#include <ntifs.h>
 #include "log.h"
 
 #define IOCTL_POOL_MANAGER_ALLOCATE CTL_CODE(FILE_DEVICE_UNKNOWN, 0x900, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)

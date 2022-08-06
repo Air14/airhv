@@ -1,4 +1,3 @@
-#include <ntddk.h>
 #include <ntifs.h>
 #include "nt.h"
 
