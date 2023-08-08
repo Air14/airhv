@@ -65,6 +65,13 @@ namespace hv
 	unsigned __int64 swap_context();
 
 	/// <summary>
+	/// Swap cr3 with current process dtb
+	/// </summary>
+	/// <param name="new_cr3"></param>
+	/// <returns> old cr3 </returns>
+	unsigned __int64 swap_context(unsigned __int64 new_cr3);
+
+	/// <summary>
 	/// Restore cr3
 	/// </summary>
 	/// <param name="old_cr3"></param>

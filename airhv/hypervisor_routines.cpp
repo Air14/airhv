@@ -15,6 +15,7 @@
 #include "interrupt.h"
 #include "allocators.h"
 #include "asm/vm_intrin.h"
+#include "spinlock.h"
 
 #define NON_CANONICIAL_ADDRESS_END 0xFFFF800000000000
 #define NON_CANONICIAL_ADDRESS_START 0x0000800000000000
@@ -82,6 +83,18 @@ namespace hv
 		unsigned __int64 guest_cr3 = current_process->DirectoryTableBase;
 
 		__writecr3(guest_cr3);
+		return current_cr3;
+	}
+
+	/// <summary>
+	/// Swap cr3
+	/// </summary>
+	/// <param name="new_cr3"></param>
+	/// <returns> old cr3 </returns>
+	unsigned __int64 swap_context(unsigned __int64 new_cr3)
+	{
+		unsigned __int64 current_cr3 = __readcr3();
+		__writecr3(new_cr3);
 		return current_cr3;
 	}
 
@@ -307,7 +320,7 @@ namespace hv
 	/// </summary>
 	void dump_vmcs()
 	{
-		spinlock::lock(&vmcs_dump_lock);
+		spinlock dump_lock(&vmcs_dump_lock);
 
 		DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL,"-----------------------------------VMCS CORE %u DUMP-----------------------------------\r\n",KeGetCurrentProcessorIndex());
 
@@ -507,7 +520,5 @@ namespace hv
 		LogDump("VM_EXIT_INSTRUCTION_INFORMATION: 0x%llX", vmread(VM_EXIT_INSTRUCTION_INFORMATION));
 
 		DbgPrintEx(DPFLTR_IHVDRIVER_ID, DPFLTR_ERROR_LEVEL, "-----------------------------------VMCS CORE %u DUMP-----------------------------------\r\n", KeGetCurrentProcessorIndex());
-
-		spinlock::unlock(&vmcs_dump_lock);
 	}
 }

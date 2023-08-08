@@ -1,6 +1,7 @@
 #pragma warning( disable : 4201)
 
 #include <ntddk.h>
+#include <intrin.h>
 #include "ntapi.h"
 #include "asm\vm_intrin.h"
 #include "vmcall_reason.h"
@@ -8,34 +9,67 @@
 
 #define IOCTL_POOL_MANAGER_ALLOCATE CTL_CODE(FILE_DEVICE_UNKNOWN, 0x900, METHOD_BUFFERED, FILE_SPECIAL_ACCESS)
 
-namespace hvgt 
+namespace hvgt
 {
-	void broadcast_vmoff(KDPC* Dpc, PVOID DeferredContext, PVOID SystemArgument1, PVOID SystemArgument2)
+	void broadcast_vmoff(KDPC*, PVOID, PVOID SystemArgument1, PVOID SystemArgument2)
 	{
-		UNREFERENCED_PARAMETER(Dpc);
-		UNREFERENCED_PARAMETER(DeferredContext);
-
 		__vm_call(VMCALL_VMXOFF, 0, 0, 0);
 		KeSignalCallDpcSynchronize(SystemArgument2);
 		KeSignalCallDpcDone(SystemArgument1);
 	}
 
-	void broadcast_invept_all_contexts(KDPC* Dpc, PVOID DeferredContext, PVOID SystemArgument1, PVOID SystemArgument2)
+	struct HookFunctionArgs
 	{
-		UNREFERENCED_PARAMETER(Dpc);
-		UNREFERENCED_PARAMETER(DeferredContext);
-		
-		__vm_call(VMCALL_INVEPT_CONTEXT, true, 0, 0);
+		void* target_address;
+		void* hook_function;
+		void** origin_function;
+		unsigned __int64 current_cr3;
+		volatile SHORT statuses;
+	};
+	void broadcast_hook_function(KDPC*, PVOID DeferredContext, PVOID SystemArgument1, PVOID SystemArgument2)
+	{
+		const auto args = reinterpret_cast<HookFunctionArgs*>(DeferredContext);
+
+		if (__vm_call_ex(VMCALL_EPT_HOOK_FUNCTION, (unsigned __int64)args->target_address,
+			(unsigned __int64)args->hook_function, (unsigned __int64)args->origin_function, args->current_cr3, 0, 0, 0, 0, 0))
+		{
+			InterlockedIncrement16(&args->statuses);
+		}
+
 		KeSignalCallDpcSynchronize(SystemArgument2);
 		KeSignalCallDpcDone(SystemArgument1);
 	}
 
-	void broadcast_invept_single_context(KDPC* Dpc, PVOID DeferredContext, PVOID SystemArgument1, PVOID SystemArgument2)
+	struct UnHookFunctionArgs
 	{
-		UNREFERENCED_PARAMETER(Dpc);
-		UNREFERENCED_PARAMETER(DeferredContext); 
-		
-		__vm_call(VMCALL_INVEPT_CONTEXT, false, 0, 0);
+		bool unhook_all_functions;
+		void* function_to_unhook;
+		unsigned __int64 current_cr3;
+		volatile SHORT statuses;
+	};
+	void broadcast_unhook_function(KDPC*, PVOID DeferredContext, PVOID SystemArgument1, PVOID SystemArgument2)
+	{
+		const auto args = reinterpret_cast<UnHookFunctionArgs*>(DeferredContext);
+
+		if (__vm_call(VMCALL_EPT_UNHOOK_FUNCTION, args->unhook_all_functions,
+			(unsigned __int64)args->function_to_unhook, args->current_cr3))
+		{
+			InterlockedIncrement16(&args->statuses);
+		}
+
+		KeSignalCallDpcSynchronize(SystemArgument2);
+		KeSignalCallDpcDone(SystemArgument1);
+	}
+
+	void broadcast_test_vmcall(KDPC*, PVOID DeferredContext, PVOID SystemArgument1, PVOID SystemArgument2)
+	{
+		const auto statuses = reinterpret_cast<volatile SHORT*>(DeferredContext);
+
+		if (__vm_call(VMCALL_TEST, 0, 0, 0))
+		{
+			InterlockedIncrement16(statuses);
+		}
+
 		KeSignalCallDpcSynchronize(SystemArgument2);
 		KeSignalCallDpcDone(SystemArgument1);
 	}
@@ -46,17 +80,6 @@ namespace hvgt
 	void vmoff()
 	{
 		KeGenericCallDpc(broadcast_vmoff, NULL);
-	}
-
-	/// <summary>
-	/// Invalidates mappings in the translation lookaside buffers (TLBs) 
-	/// and paging-structure caches that were derived from extended page tables (EPT)
-	/// </summary>
-	/// <param name="invept_all"> If true invalidates all contexts otherway invalidate only single context (currently hv doesn't use more than 1 context)</param>
-	void invept(bool invept_all)
-	{
-		if (invept_all == true) KeGenericCallDpc(broadcast_invept_all_contexts, NULL);
-		else KeGenericCallDpc(broadcast_invept_single_context, NULL);
 	}
 
 	/// <summary>
@@ -75,11 +98,12 @@ namespace hvgt
 	/// Unhook all functions and invalidate tlb
 	/// </summary>
 	/// <returns> status </returns>
-	bool ept_unhook()
+	bool unhook_all_functions()
 	{
-		bool status = __vm_call(VMCALL_EPT_UNHOOK_FUNCTION, true, 0, 0);
-		invept(false);
-		return status;
+		UnHookFunctionArgs args{ true, nullptr, __readcr3(), 0 };
+		KeGenericCallDpc(broadcast_unhook_function, &args);
+
+		return static_cast<ULONG>(args.statuses) == KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
 	}
 
 	/// <summary>
@@ -87,11 +111,12 @@ namespace hvgt
 	/// </summary>
 	/// <param name="function_address"></param>
 	/// <returns> status </returns>
-	bool ept_unhook(void* function_address)
+	bool unhook_function(void* function_address)
 	{
-		bool status = __vm_call(VMCALL_EPT_UNHOOK_FUNCTION, false, (unsigned __int64)function_address, 0);
-		invept(false);
-		return status;
+		UnHookFunctionArgs args{ false, function_address, __readcr3(), 0 };
+		KeGenericCallDpc(broadcast_unhook_function, &args);
+
+		return static_cast<ULONG>(args.statuses) == KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
 	}
 
 	/// <summary>
@@ -103,28 +128,18 @@ namespace hvgt
 	/// <returns> status </returns>
 	bool hook_function(void* target_address, void* hook_function, void** origin_function)
 	{
-		bool status = __vm_call_ex(VMCALL_EPT_HOOK_FUNCTION, (unsigned __int64)target_address, (unsigned __int64)hook_function, 0, (unsigned __int64)origin_function, 0, 0, 0, 0, 0);
-		invept(false);
+		HookFunctionArgs args{ target_address, hook_function, origin_function, __readcr3(), 0 };
+		KeGenericCallDpc(broadcast_hook_function, &args);
 
-		return status;
+		return static_cast<ULONG>(args.statuses) == KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
 	}
 
 	/// <summary>
-	/// Hook function via ept and invalidates mappings
+	/// Dump info about allocated pools (Use Dbgview to see information)
 	/// </summary>
-	/// <param name="target_address">Address of function which we want to hook</param>
-	/// <param name="hook_function">Address of function which is used to call original function</param>
-	/// <param name="trampoline_address">Address of some memory which isn't used with size at least 13 and withing 2GB range of target function
-	/// Use only if you can function you want to hook use relative offeset in first 13 bytes of it. For example if you want hook NtYieldExecution which
-	/// size is 15 bytes you have to find a codecave witihn ntoskrnl.exe image with size atleast 13 bytes and pass it there</param>
-	/// <param name="origin_function">Address of function which is used to call original function</param>
-	/// <returns> status </returns>
-	bool hook_function(void* target_address, void* hook_function, void* trampoline_address, void** origin_function)
+	void dump_pool_manager()
 	{
-		bool status = __vm_call_ex(VMCALL_EPT_HOOK_FUNCTION, (unsigned __int64)target_address, (unsigned __int64)hook_function,(unsigned __int64) trampoline_address, (unsigned __int64)origin_function, 0, 0, 0, 0, 0);
-		invept(false);
-
-		return status;
+		__vm_call(VMCALL_DUMP_POOL_MANAGER, 0, 0, 0);
 	}
 
 	/// <summary>
@@ -133,14 +148,17 @@ namespace hvgt
 	/// <returns> status </returns>
 	bool test_vmcall()
 	{
-		return __vm_call(VMCALL_TEST, 0, 0, 0);
+		volatile SHORT statuses{};
+		KeGenericCallDpc(broadcast_test_vmcall, (PVOID)&statuses);
+
+		return static_cast<ULONG>(statuses) == KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
 	}
 
 	/// <summary>
 	/// Send irp with information to allocate memory
 	/// </summary>
 	/// <returns> status </returns>
-	bool perform_memory_allocation()
+	bool send_irp_perform_allocation()
 	{
 		PDEVICE_OBJECT airhv_device_object;
 		KEVENT event;

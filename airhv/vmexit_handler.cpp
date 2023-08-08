@@ -23,7 +23,6 @@
 void vmexit_ept_violation_handler(__vcpu* vcpu);
 void vmexit_unimplemented(__vcpu* vcpu);
 void vmexit_exception_handler(__vcpu* vcpu);
-void vmexit_ept_violation_handler(__vcpu* vcpu);
 void vmexit_cr_handler(__vcpu* vcpu);
 void vmexit_vm_instruction(__vcpu* vcpu);
 void vmexit_triple_fault_handler(__vcpu* vcpu);
@@ -425,18 +424,22 @@ void vmexit_ept_violation_handler(__vcpu* vcpu)
 	ept_violation.all = vcpu->vmexit_info.qualification;
 	unsigned __int64 guest_physical_adddress = hv::vmread(GUEST_PHYSICAL_ADDRESS);
 
-	PLIST_ENTRY current = &g_vmm_context->ept_state->hooked_page_list;
-	while (&g_vmm_context->ept_state->hooked_page_list != current->Flink)
+	PLIST_ENTRY current = &vcpu->ept_state->hooked_page_list;
+	while (&vcpu->ept_state->hooked_page_list != current->Flink)
 	{
 		current = current->Flink;
 		__ept_hooked_page_info* hooked_entry = CONTAINING_RECORD(current, __ept_hooked_page_info, hooked_page_list);
 		if (hooked_entry->pfn_of_hooked_page == GET_PFN(guest_physical_adddress))
 		{
-			if ((ept_violation.read_access || ept_violation.write_access) && (!ept_violation.ept_readable || !ept_violation.ept_writeable)) 
-				ept::swap_pml1(hooked_entry->entry_address, hooked_entry->original_entry);
+			if ((ept_violation.read_access || ept_violation.write_access) && (!ept_violation.ept_readable || !ept_violation.ept_writeable))
+			{
+				ept::swap_pml1_and_invalidate_tlb(*vcpu->ept_state, hooked_entry->entry_address, hooked_entry->original_entry, invept_type::INVEPT_SINGLE_CONTEXT);
+			}
 
 			else if (ept_violation.execute_access && (ept_violation.ept_readable || ept_violation.ept_writeable))
-				ept::swap_pml1(hooked_entry->entry_address, hooked_entry->changed_entry);
+			{
+				ept::swap_pml1_and_invalidate_tlb(*vcpu->ept_state, hooked_entry->entry_address, hooked_entry->changed_entry, invept_type::INVEPT_SINGLE_CONTEXT);
+			}
 
 			break;
 		}
@@ -456,7 +459,32 @@ void vmexit_exception_handler(__vcpu* vcpu)
 
 	// Exit Qualification contain the linear address which caused page fault
 	if (interrupt_info.vector == EXCEPTION_VECTOR_PAGE_FAULT)
+	{
 		__writecr2(vcpu->vmexit_info.qualification);
+	}
+	else if (interrupt_info.vector == EXCEPTION_VECTOR_SINGLE_STEP && vcpu->vmexit_info.guest_rflags.trap_flag == false)
+	{
+		PLIST_ENTRY current_hooked_page = &vcpu->ept_state->hooked_page_list;
+		while (&vcpu->ept_state->hooked_page_list != current_hooked_page->Flink)
+		{
+			current_hooked_page = current_hooked_page->Flink;
+			__ept_hooked_page_info* hooked_page_entry = CONTAINING_RECORD(current_hooked_page, __ept_hooked_page_info, hooked_page_list);
+
+			PLIST_ENTRY current_hooked_function = &hooked_page_entry->hooked_functions_list;
+			while (&hooked_page_entry->hooked_functions_list != current_hooked_function->Flink)
+			{
+				current_hooked_function = current_hooked_function->Flink;
+				__ept_hooked_function_info* hooked_function_entry =
+					CONTAINING_RECORD(current_hooked_function, __ept_hooked_function_info, hooked_function_list);
+
+				if (hooked_function_entry->original_function_va == (void*)vcpu->vmexit_info.guest_rip)
+				{
+					hv::vmwrite(GUEST_RIP, hooked_function_entry->hooked_function_va);
+					return;
+				}
+			}
+		}
+	}
 
 	hv::inject_interruption(interrupt_info.vector, interrupt_info.interruption_type, error_code, interrupt_info.error_code_valid);
 }
@@ -515,7 +543,7 @@ void vmexit_cpuid_handler(__vcpu* vcpu)
 	vcpu->vmexit_info.guest_registers->rbx = cpuid_reg.ebx;
 	vcpu->vmexit_info.guest_registers->rcx = cpuid_reg.ecx;
 	vcpu->vmexit_info.guest_registers->rdx = cpuid_reg.edx;
-
+	
 	adjust_rip(vcpu);
 }
 

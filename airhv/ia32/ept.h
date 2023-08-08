@@ -156,19 +156,19 @@ struct __ept_hooked_function_info
 	unsigned __int64 hook_size;
 
 	//
-	// Virtual address of function
+	// Virtual address of hooked function
 	//
-	void* virtual_address;
+	void* hooked_function_va;
 
 	//
-	// Address to first trampoline used to call original function
+	// Virtual address of original function
 	//
-	unsigned __int8* first_trampoline_address;
+	void* original_function_va;
 
 	//
-	// Address of code cave which is used to jmp to our hooked function
+	// Address of trampoline used to call original function
 	//
-	void* second_trampoline_address;
+	unsigned __int8* trampoline_address;
 };
 
 struct __ept_hooked_page_info
@@ -314,6 +314,13 @@ union __ept_violation
 	};
 };
 
+struct __ept_state
+{
+	LIST_ENTRY hooked_page_list;
+	__eptp* ept_pointer;
+	__vmm_ept_page_table* ept_page_table;
+};
+
 namespace ept
 {
 	/// <summary>
@@ -325,7 +332,7 @@ namespace ept
 	/// Initialize ept structure
 	/// </summary>
 	/// <returns></returns>
-	bool initialize();
+	bool initialize(__ept_state& ept_state);
 
 	/// <summary>
 	/// Change page physcial frame number and invalidate tlb
@@ -334,12 +341,12 @@ namespace ept
 	/// <param name="entry_value"> Pointer to page table entry which we want use to change </param>
 	/// <param name="invalidate"> If true invalidates tlb after changning pte value </param>
 	/// <param name="invalidation_type"> Specifiy if we want to invalidate single context or all contexts  </param>
-	void swap_pml1_and_invalidate_tlb(__ept_pte* entry_address, __ept_pte entry_value, invept_type invalidation_type);
+	void swap_pml1_and_invalidate_tlb(__ept_state& ept_state, __ept_pte* entry_address, __ept_pte entry_value, invept_type invalidation_type);
 
 	/// <summary>
 	/// Unhook all functions and invalidate tlb
 	/// </summary>
-	void unhook_all_functions();
+	void unhook_all_functions(__ept_state& ept_state);
 
 	/// <summary>
 	/// Perfrom a hook
@@ -349,21 +356,14 @@ namespace ept
 	/// <param name="(Optional) trampoline"> Address of codecave which is located in 2gb range of target function (Use only if you need smaller trampoline)</param>
 	/// <param name="origin_function"> Address used to call original function </param>
 	/// <returns></returns>
-	bool hook_function(void* target_address, void* hook_function, void* trampoline, void** origin_function);
+	bool hook_function(__ept_state& ept_state, void* target_address, void* hook_function, void** origin_function);
 
 	/// <summary>
 	/// Unhook single function
 	/// </summary>
 	/// <param name="virtual_address"></param>
 	/// <returns></returns>
-	bool unhook_function(unsigned __int64 virtual_address);
-
-	/// <summary>
-	/// Swap physcial pages and invalidate tlb
-	/// </summary>
-	/// <param name="entry_address"> Pointer to page table entry which we want to change </param>
-	/// <param name="entry_value"> Pointer to page table entry which we want use to change </param>
-	void swap_pml1(__ept_pte* entry_address, __ept_pte entry_value);
+	bool unhook_function(__ept_state& ept_state, unsigned __int64 virtual_address);
 
 	/// <summary>
 	/// Split pml2 into 512 pml1 entries (From one 2MB page to 512 4KB pages)
@@ -371,5 +371,5 @@ namespace ept
 	/// <param name="pre_allocated_buffer"> Pre allocated buffer for split </param>
 	/// <param name="physical_address"></param>
 	/// <returns> status </returns>
-	bool split_pml2(void* pre_allocated_buffer, unsigned __int64 physical_address);
+	bool split_pml2(__ept_state& ept_state, void* pre_allocated_buffer, unsigned __int64 physical_address);
 }

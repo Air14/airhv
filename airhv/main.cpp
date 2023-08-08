@@ -18,7 +18,7 @@ __vmm_context* g_vmm_context = 0;
 	 {
 		 if (g_vmm_context->vcpu_table[0]->vcpu_status.vmm_launched == true)
 		 {
-			 hvgt::ept_unhook();
+			 hvgt::unhook_all_functions();
 			 hvgt::vmoff();
 		 }
 	 }

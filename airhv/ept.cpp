@@ -10,6 +10,7 @@
 #include "hypervisor_routines.h"
 #include "ia32\mtrr.h"
 #include "allocators.h"
+#include "spinlock.h"
 
 namespace ept
 {
@@ -37,11 +38,11 @@ namespace ept
 
 		if (mtrr_def_type.mtrr_enabled == false)
 		{
-			g_vmm_context->ept_state->default_memory_type = MEMORY_TYPE_UNCACHEABLE;
+			g_vmm_context->mtrr_info.default_memory_type = MEMORY_TYPE_UNCACHEABLE;
 			return;
 		}
 
-		g_vmm_context->ept_state->default_memory_type = mtrr_def_type.memory_type;
+		g_vmm_context->mtrr_info.default_memory_type = mtrr_def_type.memory_type;
 
 		if (mtrr_cap.smrr_support == true)
 		{
@@ -50,7 +51,7 @@ namespace ept
 
 			if (current_phys_mask.valid && current_phys_base.type != mtrr_def_type.memory_type)
 			{
-				descriptor = &g_vmm_context->ept_state->memory_range[g_vmm_context->ept_state->enabled_memory_ranges++];
+				descriptor = &g_vmm_context->mtrr_info.memory_range[g_vmm_context->mtrr_info.enabled_memory_ranges++];
 				descriptor->physcial_base_address = current_phys_base.physbase << PAGE_SHIFT;
 
 				unsigned long bits_in_mask = 0;
@@ -75,7 +76,7 @@ namespace ept
 
 			for (unsigned int i = 0; i < 8; i++)
 			{
-				descriptor = &g_vmm_context->ept_state->memory_range[g_vmm_context->ept_state->enabled_memory_ranges++];
+				descriptor = &g_vmm_context->mtrr_info.memory_range[g_vmm_context->mtrr_info.enabled_memory_ranges++];
 				descriptor->memory_type = k64_types.types[i];
 				descriptor->physcial_base_address = k64_base + (k64_size * i);
 				descriptor->physcial_end_address = k64_base + (k64_size * i) + (k64_size - 1);
@@ -88,7 +89,7 @@ namespace ept
 
 				for (unsigned int j = 0; j < 8; j++)
 				{
-					descriptor = &g_vmm_context->ept_state->memory_range[g_vmm_context->ept_state->enabled_memory_ranges++];
+					descriptor = &g_vmm_context->mtrr_info.memory_range[g_vmm_context->mtrr_info.enabled_memory_ranges++];
 					descriptor->memory_type = k16_types.types[j];
 					descriptor->physcial_base_address = (k16_base + (i * k16_size * 8)) + (k16_size * j);
 					descriptor->physcial_end_address = (k16_base + (i * k16_size * 8)) + (k16_size * j) + (k16_size - 1);
@@ -102,7 +103,7 @@ namespace ept
 
 				for (unsigned int j = 0; j < 8; j++)
 				{
-					descriptor = &g_vmm_context->ept_state->memory_range[g_vmm_context->ept_state->enabled_memory_ranges++];
+					descriptor = &g_vmm_context->mtrr_info.memory_range[g_vmm_context->mtrr_info.enabled_memory_ranges++];
 					descriptor->memory_type = k4_types.types[j];
 					descriptor->physcial_base_address = (k4_base + (i * k4_size * 8)) + (k4_size * j);
 					descriptor->physcial_end_address = (k4_base + (i * k4_size * 8)) + (k4_size * j) + (k4_size - 1);
@@ -128,7 +129,7 @@ namespace ept
 			// If range is enabled
 			if (current_phys_mask.valid && current_phys_base.type != mtrr_def_type.memory_type)
 			{
-				descriptor = &g_vmm_context->ept_state->memory_range[g_vmm_context->ept_state->enabled_memory_ranges++];
+				descriptor = &g_vmm_context->mtrr_info.memory_range[g_vmm_context->mtrr_info.enabled_memory_ranges++];
 
 				//
 				// Calculate base address, physbase is truncated by 12 bits so we have to left shift it by 12
@@ -166,16 +167,16 @@ namespace ept
 	{
 		unsigned __int64 page_start_address = is_large_page == true ? pfn * LARGE_PAGE_SIZE : pfn * PAGE_SIZE;
 		unsigned __int64 page_end_address = is_large_page == true ? (pfn * LARGE_PAGE_SIZE) + (LARGE_PAGE_SIZE - 1) : (pfn * PAGE_SIZE) + (PAGE_SIZE - 1);
-		unsigned __int8 memory_type = g_vmm_context->ept_state->default_memory_type;
+		unsigned __int8 memory_type = g_vmm_context->mtrr_info.default_memory_type;
 
-		for (unsigned int i = 0; i < g_vmm_context->ept_state->enabled_memory_ranges; i++)
+		for (unsigned int i = 0; i < g_vmm_context->mtrr_info.enabled_memory_ranges; i++)
 		{
-			if (page_start_address >= g_vmm_context->ept_state->memory_range[i].physcial_base_address &&
-				page_end_address <= g_vmm_context->ept_state->memory_range[i].physcial_end_address)
+			if (page_start_address >= g_vmm_context->mtrr_info.memory_range[i].physcial_base_address &&
+				page_end_address <= g_vmm_context->mtrr_info.memory_range[i].physcial_end_address)
 			{
-				memory_type = g_vmm_context->ept_state->memory_range[i].memory_type;
+				memory_type = g_vmm_context->mtrr_info.memory_range[i].memory_type;
 
-				if (g_vmm_context->ept_state->memory_range[i].fixed_range == true)
+				if (g_vmm_context->mtrr_info.memory_range[i].fixed_range == true)
 					break;
 
 				if (memory_type == MEMORY_TYPE_UNCACHEABLE)
@@ -196,14 +197,14 @@ namespace ept
 		unsigned __int64 page_start_address = pfn * LARGE_PAGE_SIZE;
 		unsigned __int64 page_end_address = (pfn * LARGE_PAGE_SIZE) + (LARGE_PAGE_SIZE - 1);
 
-		for (unsigned int i = 0; i < g_vmm_context->ept_state->enabled_memory_ranges; i++)
+		for (unsigned int i = 0; i < g_vmm_context->mtrr_info.enabled_memory_ranges; i++)
 		{
-			if (page_start_address <= g_vmm_context->ept_state->memory_range[i].physcial_end_address &&
-				page_end_address > g_vmm_context->ept_state->memory_range[i].physcial_end_address)
+			if (page_start_address <= g_vmm_context->mtrr_info.memory_range[i].physcial_end_address &&
+				page_end_address > g_vmm_context->mtrr_info.memory_range[i].physcial_end_address)
 				return false;
 
-			else if (page_start_address < g_vmm_context->ept_state->memory_range[i].physcial_base_address &&
-					 page_end_address >= g_vmm_context->ept_state->memory_range[i].physcial_base_address)
+			else if (page_start_address < g_vmm_context->mtrr_info.memory_range[i].physcial_base_address &&
+					 page_end_address >= g_vmm_context->mtrr_info.memory_range[i].physcial_base_address)
 				return false;
 		}
 
@@ -215,7 +216,7 @@ namespace ept
 	/// </summary>
 	/// <param name="entry"> Pointer to pml2 entry </param>
 	/// <param name="pfn"> Page frame number </param>
-	bool setup_pml2_entry(__ept_pde& entry, unsigned __int64 pfn)
+	bool setup_pml2_entry(__ept_state& ept_state, __ept_pde& entry, unsigned __int64 pfn)
 	{
 		entry.page_directory_entry.physical_address = pfn;
 		
@@ -234,7 +235,7 @@ namespace ept
 				return false;
 			}
 
-			return split_pml2(split_buffer, pfn * LARGE_PAGE_SIZE);
+			return split_pml2(ept_state, split_buffer, pfn * LARGE_PAGE_SIZE);
 		}
 	}
 
@@ -242,19 +243,19 @@ namespace ept
 	/// Create ept page table
 	/// </summary>
 	/// <returns> status </returns>
-	bool create_ept_page_table()
+	bool create_ept_page_table(__ept_state& ept_state)
 	{
 		PHYSICAL_ADDRESS max_size;
 		max_size.QuadPart = MAXULONG64;
 
-		g_vmm_context->ept_state->ept_page_table = allocate_contignous_memory<__vmm_ept_page_table>();
-		if (g_vmm_context->ept_state->ept_page_table == NULL)
+		ept_state.ept_page_table = allocate_contignous_memory<__vmm_ept_page_table>();
+		if (ept_state.ept_page_table == NULL)
 		{
 			LogError("Failed to allocate memory for PageTable");
 			return false;
 		}
 
-		__vmm_ept_page_table* page_table = g_vmm_context->ept_state->ept_page_table;
+		__vmm_ept_page_table* page_table = ept_state.ept_page_table;
 		RtlSecureZeroMemory(page_table, sizeof(__vmm_ept_page_table));
 
 		//
@@ -288,7 +289,7 @@ namespace ept
 
 		for (int i = 0; i < 512; i++)
 			for (int j = 0; j < 512; j++)
-				if(setup_pml2_entry(page_table->pml2[i][j], (i * 512) + j) == false)
+				if(setup_pml2_entry(ept_state, page_table->pml2[i][j], (i * 512) + j) == false)
 					return false;
 
 		return true;
@@ -298,7 +299,7 @@ namespace ept
 	/// Initialize ept structure
 	/// </summary>
 	/// <returns></returns>
-	bool initialize()
+	bool initialize(__ept_state& ept_state)
 	{
 		__eptp* ept_pointer = allocate_pool<__eptp*>(PAGE_SIZE);
 		if (ept_pointer == NULL)
@@ -306,17 +307,17 @@ namespace ept
 
 		RtlSecureZeroMemory(ept_pointer, PAGE_SIZE);
 
-		if (create_ept_page_table() == false)
+		if (create_ept_page_table(ept_state) == false)
 			return false;
 
-		ept_pointer->memory_type = g_vmm_context->ept_state->default_memory_type;
+		ept_pointer->memory_type = g_vmm_context->mtrr_info.default_memory_type;
 
 		// Indicates 4 level paging
 		ept_pointer->page_walk_length = 3;
 
-		ept_pointer->pml4_address = GET_PFN(MmGetPhysicalAddress(&g_vmm_context->ept_state->ept_page_table->pml4).QuadPart);
+		ept_pointer->pml4_address = GET_PFN(MmGetPhysicalAddress(&ept_state.ept_page_table->pml4).QuadPart);
 
-		g_vmm_context->ept_state->ept_pointer = ept_pointer;
+		ept_state.ept_pointer = ept_pointer;
 
 		return true;
 	}
@@ -326,7 +327,7 @@ namespace ept
 	/// </summary>
 	/// <param name="physical_address"></param>
 	/// <returns> pointer to pml2 </returns>
-	__ept_pde* get_pml2_entry(unsigned __int64 physical_address)
+	__ept_pde* get_pml2_entry(__ept_state& ept_state, unsigned __int64 physical_address)
 	{
 		unsigned __int64 pml4_index = MASK_EPT_PML4_INDEX(physical_address);
 		unsigned __int64 pml3_index = MASK_EPT_PML3_INDEX(physical_address);
@@ -338,7 +339,7 @@ namespace ept
 			return nullptr;
 		}
 
-		return &g_vmm_context->ept_state->ept_page_table->pml2[pml3_index][pml2_index];
+		return &ept_state.ept_page_table->pml2[pml3_index][pml2_index];
 	}
 
 	/// <summary>
@@ -346,7 +347,7 @@ namespace ept
 	/// </summary>
 	/// <param name="physical_address"></param>
 	/// <returns></returns>
-	__ept_pte* get_pml1_entry(unsigned __int64 physical_address)
+	__ept_pte* get_pml1_entry(__ept_state& ept_state, unsigned __int64 physical_address)
 	{
 		unsigned __int64 pml4_index = MASK_EPT_PML4_INDEX(physical_address);
 		unsigned __int64 pml3_index = MASK_EPT_PML3_INDEX(physical_address);
@@ -358,7 +359,7 @@ namespace ept
 			return nullptr;
 		}
 
-		__ept_pde* pml2 = &g_vmm_context->ept_state->ept_page_table->pml2[pml3_index][pml2_index];
+		__ept_pde* pml2 = &ept_state.ept_page_table->pml2[pml3_index][pml2_index];
 		if (pml2->page_directory_entry.large_page == 1)
 		{
 			return nullptr;
@@ -383,9 +384,9 @@ namespace ept
 	/// <param name="pre_allocated_buffer"> Pre allocated buffer for split </param>
 	/// <param name="physical_address"></param>
 	/// <returns> status </returns>
-	bool split_pml2(void* pre_allocated_buffer, unsigned __int64 physical_address)
+	bool split_pml2(__ept_state& ept_state, void* pre_allocated_buffer, unsigned __int64 physical_address)
 	{
-		__ept_pde* entry = get_pml2_entry(physical_address);
+		__ept_pde* entry = get_pml2_entry(ept_state, physical_address);
 		if (entry == NULL)
 		{
 			LogError("Invalid address passed");
@@ -433,43 +434,21 @@ namespace ept
 	/// </summary>
 	/// <param name="entry_address"> Pointer to page table entry which we want to change </param>
 	/// <param name="entry_value"> Pointer to page table entry which we want use to change </param>
-	void swap_pml1(__ept_pte* entry_address, __ept_pte entry_value)
-	{
-		// Acquire the lock
-		spinlock::lock(&g_vmm_context->ept_state->pml_lock);
-
-		// Set the value
-		entry_address->all = entry_value.all;
-
-		// Release the lock
-		spinlock::unlock(&g_vmm_context->ept_state->pml_lock);
-	}
-
-	/// <summary>
-	/// Swap physcial pages and invalidate tlb
-	/// </summary>
-	/// <param name="entry_address"> Pointer to page table entry which we want to change </param>
-	/// <param name="entry_value"> Pointer to page table entry which we want use to change </param>
 	/// <param name="invalidation_type"> Specifiy if we want to invalidate single context or all contexts  </param>
-	void swap_pml1_and_invalidate_tlb(__ept_pte* entry_address, __ept_pte entry_value, invept_type invalidation_type)
+	void swap_pml1_and_invalidate_tlb(__ept_state& ept_state, __ept_pte* entry_address, __ept_pte entry_value, invept_type invalidation_type)
 	{
-		// Acquire the lock
-		spinlock::lock(&g_vmm_context->ept_state->pml_lock);
-
 		// Set the value
 		entry_address->all = entry_value.all;
 
 		// Invalidate the cache
 		if (invalidation_type == INVEPT_SINGLE_CONTEXT)
 		{
-			invept_single_context(g_vmm_context->ept_state->ept_pointer->all);
+			invept_single_context(ept_state.ept_pointer->all);
 		}
 		else
 		{
 			invept_all_contexts();
 		}
-		// Release the lock
-		spinlock::unlock(&g_vmm_context->ept_state->pml_lock);
 	}
 
 	/// <summary>
@@ -498,6 +477,15 @@ namespace ept
 	}
 
 	/// <summary>
+	/// Write icebp instruction to trigger vmexit
+	/// </summary>
+	/// <param name="target_buffer"></param>
+	void hook_write_icebp_ins(unsigned __int8* target_buffer)
+	{
+		*target_buffer = 0xf1;
+	}
+
+	/// <summary>
 	/// Write relative jump,
 	/// Size: 5 Bytes
 	/// </summary>
@@ -521,100 +509,36 @@ namespace ept
 	/// </summary>
 	/// <param name="hooked_page"> Pointer to __ept_hooked_page_info structure which holds info about hooked page </param>
 	/// <param name="target_function"> Address of function which we want to hook </param>
-	/// <param name="hooked_function"> Address of hooked version of function which we are hooking </param>
 	/// <param name="origin_function"> Address used to call original function </param>
 	/// <returns></returns>
-	bool hook_instruction_memory(__ept_hooked_function_info* hooked_function_info, void* target_function, void* hooked_function,void* trampoline, void** origin_function)
+	bool hook_instruction_memory(__ept_hooked_function_info* hooked_function_info, void* target_function, void** origin_function)
 	{
-		unsigned __int64 hooked_instructions_size = 0;
-
 		// Get offset of hooked function within page
-		 unsigned __int64 page_offset = MASK_EPT_PML1_OFFSET((unsigned __int64)target_function);
+		unsigned __int64 page_offset = MASK_EPT_PML1_OFFSET((unsigned __int64)target_function);
 
-		if (trampoline != 0)
-		{
-			hooked_instructions_size = 0;
-
-			// If first 5 bytes of function are on 2 separate pages then return (Hypervisor doesn't support function hooking at page boundaries)
-			if ((page_offset + 5) > PAGE_SIZE - 1)
-			{
-				LogError("Function at page boundary");
-				return false;
-			}
-
-			while (hooked_instructions_size < 5)
-			{
-				hooked_instructions_size += LDE((unsigned __int8*)target_function + hooked_instructions_size, 64);
-			}
-
-			// If instructions to hook are on two seperate pages then stop hooking (Hypervisor doesn't support function hooking at page boundaries)
-			if ((hooked_instructions_size + 5) > PAGE_SIZE - 1)
-			{
-				LogError("Function at page boundary");
-				return false;
-			}
-
-			hooked_function_info->hook_size = hooked_instructions_size;
-
-			hook_write_relative_jump(&hooked_function_info->fake_page_contents[page_offset], (unsigned __int64)trampoline, (unsigned __int64)target_function);
-
-			RtlCopyMemory(hooked_function_info->first_trampoline_address, target_function, hooked_instructions_size);
-
-			hook_write_absolute_jump(&hooked_function_info->first_trampoline_address[hooked_instructions_size], (unsigned __int64)target_function + hooked_instructions_size);
-
-			*origin_function = hooked_function_info->first_trampoline_address;
-
-			return hook_function(trampoline, hooked_function, nullptr, nullptr);
-		}
-
-		// If first 14 bytes of function are on 2 separate pages then return (Hypervisor doesn't support function hooking at page boundaries)
-		if ((page_offset + 14) > PAGE_SIZE - 1)
-		{
-			LogError("Function at page boundary");
-			return false;
-		}
-
-		// Get the full size of instructions necessary to copy
-		while (hooked_instructions_size < 14)
-			hooked_instructions_size += LDE((unsigned __int8*)target_function + hooked_instructions_size, 64);
-
-
-		// If instructions to hook are on two seperate pages then return (Hypervisor doesn't support function hooking at page boundaries)
-		if ((hooked_instructions_size + 14) > PAGE_SIZE - 1)
-		{
-			LogError("Function at page boundary");
-			return false;
-		}
+		// Get the full size of instruction necessary to copy
+		unsigned __int64 hooked_instructions_size = LDE(target_function, 64);
 
 		hooked_function_info->hook_size = hooked_instructions_size;
 
-		//
-		// Now it's trampoline so we don't have to store origin function
-		if (origin_function == nullptr)
-		{
-			hook_write_absolute_jump(&hooked_function_info->fake_page_contents[page_offset], (unsigned __int64)hooked_function);
-
-			return true;
-		}
-
 		// Copy overwritten instructions to trampoline buffer
-		RtlCopyMemory(hooked_function_info->first_trampoline_address, target_function, hooked_instructions_size);
+		RtlCopyMemory(hooked_function_info->trampoline_address, target_function, hooked_instructions_size);
 
 		// Add the absolute jump back to the original function.
-		hook_write_absolute_jump(&hooked_function_info->first_trampoline_address[hooked_instructions_size], (unsigned __int64)target_function + hooked_instructions_size);
+		hook_write_absolute_jump(&hooked_function_info->trampoline_address[hooked_instructions_size], (unsigned __int64)target_function + hooked_instructions_size);
 
 		// Return to user address of trampoline to call original function
-		*origin_function = hooked_function_info->first_trampoline_address;
+		*origin_function = hooked_function_info->trampoline_address;
 
-		// Write the absolute jump to our shadow page memory to jump to our hooked_page.
-		hook_write_absolute_jump(&hooked_function_info->fake_page_contents[page_offset], (unsigned __int64)hooked_function);
+		// Write icebp instruction to our shadow page memory to trigger vmexit.
+		hook_write_icebp_ins(&hooked_function_info->fake_page_contents[page_offset]);
 
 		return true;
 	}
 
-	bool is_page_splitted(unsigned __int64 physical_address)
+	bool is_page_splitted(__ept_state& ept_state, unsigned __int64 physical_address)
 	{
-		__ept_pde* entry = get_pml2_entry(physical_address);
+		__ept_pde* entry = get_pml2_entry(ept_state, physical_address);
 		return !entry->page_directory_entry.large_page;
 	}
 
@@ -623,12 +547,11 @@ namespace ept
 	/// </summary>
 	/// <param name="target_address" > Address of function which we want to hook </param>
 	/// <param name="hook_function"> Address of hooked version of function which we are hooking </param>
-	/// <param name="(Optional) trampoline">Address of code cave which is located in 2gb range of target function (Use only if you need smaller trampoline)</param>
 	/// <param name="origin_function"> Address used to call original function </param>
 	/// <returns></returns>
-	bool hook_function(void* target_function, void* hooked_function,void* trampoline, void** origin_function)
+	bool hook_function(__ept_state& ept_state, void* original_function, void* hooked_function, void** origin_function)
 	{
-		unsigned __int64 physical_address = MmGetPhysicalAddress(target_function).QuadPart;
+		unsigned __int64 physical_address = MmGetPhysicalAddress(original_function).QuadPart;
 
 		//
 		// Check if function exist in physical memory
@@ -642,8 +565,8 @@ namespace ept
 		//
 		// Check if page isn't already hooked
 		//
-		PLIST_ENTRY current = &g_vmm_context->ept_state->hooked_page_list;
-		while (&g_vmm_context->ept_state->hooked_page_list != current->Flink)
+		PLIST_ENTRY current = &ept_state.hooked_page_list;
+		while (&ept_state.hooked_page_list != current->Flink)
 		{
 			current = current->Flink;
 			__ept_hooked_page_info* hooked_page_info = CONTAINING_RECORD(current, __ept_hooked_page_info, hooked_page_list);
@@ -659,31 +582,22 @@ namespace ept
 					return false;
 				}
 
-				//
-				// If we are hooking code cave for second trampoline 
-				// then origin function in null and we don't have to get pool for trampoline
-				//
-				if(origin_function != nullptr)
+				hooked_function_info->trampoline_address = pool_manager::request_pool<unsigned __int8*>(pool_manager::INTENTION_EXEC_TRAMPOLINE, TRUE, 100);
+				if (hooked_function_info->trampoline_address == nullptr)
 				{
-					hooked_function_info->first_trampoline_address = pool_manager::request_pool<unsigned __int8*>(pool_manager::INTENTION_EXEC_TRAMPOLINE, TRUE, 100);
-					if (hooked_function_info->first_trampoline_address == nullptr)
-					{
-						pool_manager::release_pool(hooked_function_info);
-						LogError("There is no pre-allocated pool for trampoline");
-						return false;
-					}
+					pool_manager::release_pool(hooked_function_info);
+					LogError("There is no pre-allocated pool for trampoline");
+					return false;
 				}
 
-				hooked_function_info->virtual_address = target_function;
-
-				hooked_function_info->second_trampoline_address = trampoline;
+				hooked_function_info->original_function_va = original_function;
 
 				hooked_function_info->fake_page_contents = hooked_page_info->fake_page_contents;
 
-				if (hook_instruction_memory(hooked_function_info, target_function, hooked_function, trampoline, origin_function) == false)
+				if (hook_instruction_memory(hooked_function_info, original_function, origin_function) == false)
 				{
-					if(hooked_function_info->first_trampoline_address != nullptr)
-						pool_manager::release_pool(hooked_function_info->first_trampoline_address);
+					if(hooked_function_info->trampoline_address != nullptr)
+						pool_manager::release_pool(hooked_function_info->trampoline_address);
 					pool_manager::release_pool(hooked_function_info);
 					LogError("Hook failed");
 					return false;
@@ -696,7 +610,7 @@ namespace ept
 			}
 		}
 
-		if (is_page_splitted(physical_address) == false)
+		if (is_page_splitted(ept_state, physical_address) == false)
 		{
 			void* split_buffer = pool_manager::request_pool<void*>(pool_manager::INTENTION_SPLIT_PML2, true, sizeof(__ept_dynamic_split));
 			if (split_buffer == nullptr)
@@ -705,7 +619,7 @@ namespace ept
 				return false;
 			}
 
-			if (split_pml2(split_buffer, physical_address) == false)
+			if (split_pml2(ept_state, split_buffer, physical_address) == false)
 			{
 				pool_manager::release_pool(split_buffer);
 				LogError("Split failed");
@@ -713,7 +627,7 @@ namespace ept
 			}
 		}
 
-		__ept_pte* target_page = get_pml1_entry(physical_address);
+		__ept_pte* target_page = get_pml1_entry(ept_state, physical_address);
 		if (target_page == nullptr)
 		{
 			LogError("Failed to get PML1 entry of the target address");
@@ -737,20 +651,13 @@ namespace ept
 			return false;
 		}
 
-		//
-		// If we are hooking code cave for second trampoline 
-		// then origin function in null and we don't have to get pool for trampoline
-		//
-		if (origin_function != nullptr)
+		hooked_function_info->trampoline_address = pool_manager::request_pool<unsigned __int8*>(pool_manager::INTENTION_EXEC_TRAMPOLINE, TRUE, 100);
+		if (hooked_function_info->trampoline_address == nullptr)
 		{
-			hooked_function_info->first_trampoline_address = pool_manager::request_pool<unsigned __int8*>(pool_manager::INTENTION_EXEC_TRAMPOLINE, TRUE, 100);
-			if (hooked_function_info->first_trampoline_address == nullptr)
-			{
-				pool_manager::release_pool(hooked_page_info);
-				pool_manager::release_pool(hooked_function_info);
-				LogError("There is no pre-allocated pool for trampoline");
-				return false;
-			}
+			pool_manager::release_pool(hooked_page_info);
+			pool_manager::release_pool(hooked_function_info);
+			LogError("There is no pre-allocated pool for trampoline");
+			return false;
 		}
 
 		hooked_page_info->pfn_of_hooked_page = GET_PFN(physical_address);
@@ -770,18 +677,18 @@ namespace ept
 
 		hooked_page_info->changed_entry.physical_address = hooked_page_info->pfn_of_fake_page_contents;
 		
-		RtlCopyMemory(&hooked_page_info->fake_page_contents, PAGE_ALIGN(target_function), PAGE_SIZE);
+		RtlCopyMemory(&hooked_page_info->fake_page_contents, PAGE_ALIGN(original_function), PAGE_SIZE);
 
-		hooked_function_info->virtual_address = target_function;
+		hooked_function_info->original_function_va = original_function;
 
-		hooked_function_info->second_trampoline_address = trampoline;
+		hooked_function_info->hooked_function_va = hooked_function;
 
 		hooked_function_info->fake_page_contents = hooked_page_info->fake_page_contents;
 
-		if(hook_instruction_memory(hooked_function_info, target_function, hooked_function, trampoline, origin_function) == false)
+		if(hook_instruction_memory(hooked_function_info, original_function, origin_function) == false)
 		{
-			if (hooked_function_info->first_trampoline_address != nullptr)
-				pool_manager::release_pool(hooked_function_info->first_trampoline_address);
+			if (hooked_function_info->trampoline_address != nullptr)
+				pool_manager::release_pool(hooked_function_info->trampoline_address);
 			pool_manager::release_pool(hooked_function_info);
 			pool_manager::release_pool(hooked_page_info);
 			LogError("Hook failed");
@@ -792,9 +699,9 @@ namespace ept
 		InsertHeadList(&hooked_page_info->hooked_functions_list, &hooked_function_info->hooked_function_list);
 
 		// Track all hooked pages
-		InsertHeadList(&g_vmm_context->ept_state->hooked_page_list, &hooked_page_info->hooked_page_list);
+		InsertHeadList(&ept_state.hooked_page_list, &hooked_page_info->hooked_page_list);
 
-		invept_single_context(g_vmm_context->ept_state->ept_pointer->all);
+		invept_single_context(ept_state.ept_pointer->all);
 
 		return true;
 	}
@@ -804,7 +711,7 @@ namespace ept
 	/// </summary>
 	/// <param name="virtual_address"></param>
 	/// <returns></returns>
-	bool unhook_function(unsigned __int64 virtual_address)
+	bool unhook_function(__ept_state& ept_state, unsigned __int64 virtual_address)
 	{
 		//
 		// Check if function which we want to unhook exist in physical memory
@@ -812,8 +719,8 @@ namespace ept
 		if (physical_address == 0)
 			return false;
 
-		PLIST_ENTRY current_hooked_page = &g_vmm_context->ept_state->hooked_page_list;
-		while (&g_vmm_context->ept_state->hooked_page_list != current_hooked_page->Flink)
+		PLIST_ENTRY current_hooked_page = &ept_state.hooked_page_list;
+		while (&ept_state.hooked_page_list != current_hooked_page->Flink)
 		{
 			current_hooked_page = current_hooked_page->Flink;
 			__ept_hooked_page_info* hooked_page_info = CONTAINING_RECORD(current_hooked_page, __ept_hooked_page_info, hooked_page_list);
@@ -836,19 +743,15 @@ namespace ept
 					// Check if the address of function which we want to unhook is 
 					// the same as address of function in hooked function info struct
 					//
-					if (function_page_offset == MASK_EPT_PML1_OFFSET(hooked_function_info->virtual_address))
+					if (function_page_offset == MASK_EPT_PML1_OFFSET(hooked_function_info->original_function_va))
 					{
 						// Restore overwritten data
-						RtlCopyMemory(&hooked_function_info->fake_page_contents[function_page_offset], hooked_function_info->virtual_address, hooked_function_info->hook_size);
+						RtlCopyMemory(&hooked_function_info->fake_page_contents[function_page_offset], hooked_function_info->original_function_va, hooked_function_info->hook_size);
 						
-						// If hook uses two trampolines unhook second one
-						if (hooked_function_info->second_trampoline_address != nullptr)
-							unhook_function((unsigned __int64)hooked_function_info->second_trampoline_address);
-
 						RemoveEntryList(current_hooked_function);
 
-						if(hooked_function_info->first_trampoline_address != nullptr)
-							pool_manager::release_pool(hooked_function_info->first_trampoline_address);
+						if(hooked_function_info->trampoline_address != nullptr)
+							pool_manager::release_pool(hooked_function_info->trampoline_address);
 						pool_manager::release_pool(hooked_function_info);
 
 						//
@@ -856,7 +759,7 @@ namespace ept
 						if (hooked_page_info->hooked_functions_list.Flink == hooked_page_info->hooked_functions_list.Blink)
 						{
 							hooked_page_info->original_entry.execute = 1;
-							swap_pml1_and_invalidate_tlb(hooked_page_info->entry_address, hooked_page_info->original_entry, INVEPT_SINGLE_CONTEXT);
+							swap_pml1_and_invalidate_tlb(ept_state, hooked_page_info->entry_address, hooked_page_info->original_entry, INVEPT_SINGLE_CONTEXT);
 
 							RemoveEntryList(current_hooked_page);
 							pool_manager::release_pool(hooked_page_info);
@@ -875,10 +778,10 @@ namespace ept
 	/// <summary>
 	/// Unhook all functions and invalidate tlb
 	/// </summary>
-	void unhook_all_functions()
+	void unhook_all_functions(__ept_state& ept_state)
 	{
-		PLIST_ENTRY current_hooked_page = g_vmm_context->ept_state->hooked_page_list.Flink;
-		while (&g_vmm_context->ept_state->hooked_page_list != current_hooked_page)
+		PLIST_ENTRY current_hooked_page = ept_state.hooked_page_list.Flink;
+		while (&ept_state.hooked_page_list != current_hooked_page)
 		{
 			__ept_hooked_page_info* hooked_entry = CONTAINING_RECORD(current_hooked_page, __ept_hooked_page_info, hooked_page_list);
 
@@ -890,8 +793,8 @@ namespace ept
 				__ept_hooked_function_info* hooked_function_info = CONTAINING_RECORD(current_hooked_function, __ept_hooked_function_info, hooked_function_list);
 				
 				// If hook uses two trampolines unhook second one
-				if (hooked_function_info->first_trampoline_address != nullptr)
-					pool_manager::release_pool(hooked_function_info->first_trampoline_address);
+				if (hooked_function_info->trampoline_address != nullptr)
+					pool_manager::release_pool(hooked_function_info->trampoline_address);
 
 				RemoveEntryList(current_hooked_function);
 
@@ -902,7 +805,7 @@ namespace ept
 
 			// Restore original pte value
 			hooked_entry->original_entry.execute = 1;
-			swap_pml1_and_invalidate_tlb(hooked_entry->entry_address, hooked_entry->original_entry, INVEPT_SINGLE_CONTEXT);
+			swap_pml1_and_invalidate_tlb(ept_state, hooked_entry->entry_address, hooked_entry->original_entry, INVEPT_SINGLE_CONTEXT);
 
 			RemoveEntryList(current_hooked_page);
 

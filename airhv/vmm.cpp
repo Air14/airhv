@@ -41,23 +41,6 @@ void free_vmm_context()
 			free_pool(g_vmm_context->pool_manager);
 		}
 
-		// EPT STATE
-		if (g_vmm_context->ept_state != nullptr)
-		{
-			// EPT POINTER
-			if (g_vmm_context->ept_state->ept_pointer != nullptr)
-			{
-				free_pool(g_vmm_context->ept_state->ept_pointer);
-			}
-			// EPT PAGE TABLE
-			if (g_vmm_context->ept_state->ept_page_table != nullptr)
-			{
-				free_contignous_memory(g_vmm_context->ept_state->ept_page_table);
-
-			}
-			free_pool(g_vmm_context->ept_state);
-		}
-
 		// VCPU TABLE
 		if (g_vmm_context->vcpu_table != nullptr)
 		{
@@ -100,6 +83,23 @@ void free_vmm_context()
 					if (g_vmm_context->vcpu_table[i]->vcpu_bitmaps.io_bitmap_b != nullptr)
 					{
 						free_pool(g_vmm_context->vcpu_table[i]->vcpu_bitmaps.io_bitmap_b);
+					}
+
+					// EPT_STATE
+					if (g_vmm_context->vcpu_table[i]->ept_state != nullptr)
+					{
+						// EPT POINTER
+						if (g_vmm_context->vcpu_table[i]->ept_state->ept_pointer != nullptr)
+						{
+							free_pool(g_vmm_context->vcpu_table[i]->ept_state->ept_pointer);
+						}
+						// EPT PAGE TABLE
+						if (g_vmm_context->vcpu_table[i]->ept_state->ept_page_table != nullptr)
+						{
+							free_contignous_memory(g_vmm_context->vcpu_table[i]->ept_state->ept_page_table);
+						}
+
+						free_pool(g_vmm_context->vcpu_table[i]->ept_state);
 					}
 
 					free_pool(g_vmm_context->vcpu_table[i]);
@@ -182,32 +182,11 @@ bool allocate_vmm_context()
 	RtlSecureZeroMemory(g_vmm_context->vcpu_table, sizeof(__vcpu*) * (g_vmm_context->processor_count));
 
 	//
-	// Allocate ept state structure
-	//
-	g_vmm_context->ept_state = allocate_pool<__ept_state>();
-	if (g_vmm_context->ept_state == nullptr)
-	{
-		LogError("ept state could not be allocated");
-		return false;
-	}
-	RtlSecureZeroMemory(g_vmm_context->ept_state, sizeof(__ept_state));
-
-	InitializeListHead(&g_vmm_context->ept_state->hooked_page_list);
-
-	//
 	// Build mtrr map for physcial memory caching informations
 	//
 	ept::build_mtrr_map();
 
 	if (pool_manager::initialize() == false)
-	{
-		return false;
-	}
-
-	//
-	// Initialize ept structure
-	//
-	if (ept::initialize() == false)
 	{
 		return false;
 	}
@@ -268,6 +247,26 @@ bool init_vcpu(__vcpu*& vcpu)
 	}
 	RtlSecureZeroMemory(vcpu->vcpu_bitmaps.io_bitmap_b, PAGE_SIZE);
 	vcpu->vcpu_bitmaps.io_bitmap_b_physical = MmGetPhysicalAddress(vcpu->vcpu_bitmaps.io_bitmap_b).QuadPart;
+
+	//
+	// Allocate ept state structure
+	//
+	vcpu->ept_state = allocate_pool<__ept_state>();
+	if (vcpu->ept_state == nullptr)
+	{
+		LogError("ept state could not be allocated");
+		return false;
+	}
+	RtlSecureZeroMemory(vcpu->ept_state, sizeof(__ept_state));
+	InitializeListHead(&vcpu->ept_state->hooked_page_list);
+
+	//
+	// Initialize ept structure
+	//
+	if (ept::initialize(*vcpu->ept_state) == false)
+	{
+		return false;
+	}
 
 	LogInfo("vcpu entry allocated successfully at %llX", vcpu);
 

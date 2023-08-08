@@ -42,17 +42,6 @@ struct __vmexit_guest_registers
     unsigned __int64 rax;
 };
 
-struct __ept_state
-{
-    LIST_ENTRY hooked_page_list;
-    __mtrr_range_descriptor memory_range[100];
-    unsigned __int32 enabled_memory_ranges;
-    unsigned __int8 default_memory_type;
-    __eptp* ept_pointer;
-    __vmm_ept_page_table* ept_page_table;
-    volatile long pml_lock;
-};
-
 struct __vmcs
 {
     union
@@ -120,24 +109,25 @@ struct __vcpu
         unsigned __int8* io_bitmap_b;
         unsigned __int64 io_bitmap_b_physical;
     }vcpu_bitmaps;
+
+    __ept_state* ept_state;
+};
+
+struct __mtrr_info
+{
+    __mtrr_range_descriptor memory_range[100];
+    unsigned __int32 enabled_memory_ranges;
+    unsigned __int8 default_memory_type;
 };
 
 struct __vmm_context
 {
     __vcpu** vcpu_table;
     pool_manager::__pool_manager* pool_manager;
-    __ept_state* ept_state;
-
+    __mtrr_info mtrr_info;
     unsigned __int32 processor_count;
     unsigned __int32 highest_basic_leaf;
     bool hv_presence;
 };
 
 extern __vmm_context* g_vmm_context;
-
-namespace spinlock 
-{
-    bool try_lock(volatile long* lock);
-    void lock(volatile long* lock);
-    void unlock(volatile long* lock);
-}

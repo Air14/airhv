@@ -172,6 +172,7 @@
     <ClInclude Include="log.h" />
     <ClInclude Include="ntapi.h" />
     <ClInclude Include="poolmanager.h" />
+    <ClInclude Include="spinlock.h" />
     <ClInclude Include="vmcall_reason.h" />
     <ClInclude Include="vmcall_handler.h" />
     <ClInclude Include="vmexit_handler.h" />

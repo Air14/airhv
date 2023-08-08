@@ -84,9 +84,9 @@ void vmexit_vmcall_handler(__vcpu* vcpu)
 
 		case VMCALL_EPT_HOOK_FUNCTION:
 		{
-			 unsigned __int64 old_cr3 = hv::swap_context();
+			unsigned __int64 old_cr3 = hv::swap_context(vmcall_parameter4);
 
-			status = ept::hook_function((void*)vmcall_parameter1, (void*)vmcall_parameter2, (void*)vmcall_parameter3, (void**)vmcall_parameter4);
+			status = ept::hook_function(*vcpu->ept_state, (void*)vmcall_parameter1, (void*)vmcall_parameter2, (void**)vmcall_parameter3);
 
 			hv::restore_context(old_cr3);
 
@@ -96,38 +96,21 @@ void vmexit_vmcall_handler(__vcpu* vcpu)
 
 		case VMCALL_EPT_UNHOOK_FUNCTION:
 		{
-			unsigned __int64 old_cr3 = hv::swap_context();
+			unsigned __int64 old_cr3 = hv::swap_context(vmcall_parameter3);
 
 			// If set unhook all pages
 			if (vmcall_parameter1 == true)
 			{
-				ept::unhook_all_functions();
+				ept::unhook_all_functions(*vcpu->ept_state);
 			}
 
 			else
 			{
 				// Page physciall address
-				status = ept::unhook_function(vmcall_parameter2);
+				status = ept::unhook_function(*vcpu->ept_state, vmcall_parameter2);
 			}
 
 			hv::restore_context(old_cr3);
-
-			adjust_rip(vcpu);
-			break;
-		}
-
-		case VMCALL_INVEPT_CONTEXT:
-		{
-			// If set invept all contexts
-			if (vmcall_parameter1 == true)
-			{
-				invept_all_contexts();
-			}
-
-			else 
-			{
-				invept_single_context(g_vmm_context->ept_state->ept_pointer->all);
-			}
 
 			adjust_rip(vcpu);
 			break;
