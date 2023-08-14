@@ -592,6 +592,8 @@ namespace ept
 
 				hooked_function_info->original_function_va = original_function;
 
+				hooked_function_info->hooked_function_va = hooked_function;
+
 				hooked_function_info->fake_page_contents = hooked_page_info->fake_page_contents;
 
 				if (hook_instruction_memory(hooked_function_info, original_function, origin_function) == false)
