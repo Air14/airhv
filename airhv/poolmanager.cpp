@@ -179,17 +179,15 @@ namespace pool_manager
     void uninitialize()
     {
         PLIST_ENTRY current = 0;
-
         if (g_vmm_context->pool_manager->list_of_allocated_pools != nullptr)
         {
-            current = g_vmm_context->pool_manager->list_of_allocated_pools;
-
-            while (g_vmm_context->pool_manager->list_of_allocated_pools != current->Flink)
+            current = g_vmm_context->pool_manager->list_of_allocated_pools->Flink;
+            while (g_vmm_context->pool_manager->list_of_allocated_pools != current)
             {
-                current = current->Flink;
-
                 // Get the head of the record
                 __pool_table* pool_table = (__pool_table*)CONTAINING_RECORD(current, __pool_table, pool_list);
+
+                current = current->Flink;
 
                 // Free the alloocated buffer
                 free_pool(pool_table->address);
