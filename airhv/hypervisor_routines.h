@@ -112,6 +112,12 @@ namespace hv
 	unsigned __int64 get_guest_address(__vcpu* vcpu);
 
 	/// <summary>
+	/// Set or unset monitor trap flag
+	/// </summary>
+	/// <param name="set"></param>
+	void set_mtf(bool set);
+
+	/// <summary>
 	/// Write to vmcs field
 	/// </summary>
 	/// <typeparam name="T"></typeparam>

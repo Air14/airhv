@@ -292,6 +292,17 @@ namespace hv
 	}
 
 	/// <summary>
+	/// Set or unset monitor trap flag
+	/// </summary>
+	/// <param name="set"></param>
+	void set_mtf(bool set)
+	{
+		__vmx_primary_processor_based_control primary_controls{ hv::vmread(CONTROL_PRIMARY_PROCESSOR_BASED_VM_EXECUTION_CONTROLS) };
+		primary_controls.monitor_trap_flag = set;
+		hv::vmwrite(CONTROL_PRIMARY_PROCESSOR_BASED_VM_EXECUTION_CONTROLS, primary_controls.all);
+	}
+
+	/// <summary>
 	/// Check if cpu support virtualization
 	/// </summary>
 	/// <returns></returns>

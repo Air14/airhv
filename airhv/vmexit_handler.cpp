@@ -42,6 +42,7 @@ void vmexit_invpcid_handler(__vcpu* vcpu);
 void vmexit_invlpg_handler(__vcpu* vcpu);
 void vmexit_ldtr_access_handler(__vcpu* vcpu);
 void vmexit_gdtr_access_handler(__vcpu* vcpu);
+void vmexit_monitor_trap_flag_handler(__vcpu* vcpu);
 
 void (*exit_handlers[EXIT_REASON_LAST])(__vcpu* guest_registers) =
 {
@@ -82,7 +83,7 @@ void (*exit_handlers[EXIT_REASON_LAST])(__vcpu* guest_registers) =
 	vmexit_failed,									// 34 EXIT_REASON_MSR_LOADING
 	vmexit_unimplemented,							// 35 EXIT_REASON_RESERVED1
 	vmexit_unimplemented,							// 36 EXIT_REASON_MWAIT
-	vmexit_unimplemented,						    // 37 EXIT_REASON_MONITOR_TRAP_FLAG
+	vmexit_monitor_trap_flag_handler,				// 37 EXIT_REASON_MONITOR_TRAP_FLAG
 	vmexit_unimplemented,							// 38 EXIT_REASON_RESERVED2
 	vmexit_unimplemented,							// 39 EXIT_REASON_MONITOR
 	vmexit_unimplemented,							// 40 EXIT_REASON_PAUSE
@@ -115,6 +116,18 @@ void (*exit_handlers[EXIT_REASON_LAST])(__vcpu* guest_registers) =
 	vmexit_unimplemented,							// 67 EXIT_REASON_UMWAIT
 	vmexit_unimplemented							// 68 EXIT_REASON_TPAUSE
 };
+
+void vmexit_monitor_trap_flag_handler(__vcpu* vcpu)
+{
+	hv::set_mtf(false);
+	const auto hooked_entry = vcpu->ept_state->page_to_change;
+	if (hooked_entry)
+	{
+		hooked_entry->original_entry.execute = false;
+		vcpu->ept_state->page_to_change = nullptr;
+		ept::swap_pml1_and_invalidate_tlb(*vcpu->ept_state, hooked_entry->entry_address, hooked_entry->original_entry, invept_type::INVEPT_SINGLE_CONTEXT);
+	}
+}
 
 /// <summary>
 /// sgdt,sidt,lgdt,lidt handler
@@ -433,7 +446,20 @@ void vmexit_ept_violation_handler(__vcpu* vcpu)
 		{
 			if ((ept_violation.read_access || ept_violation.write_access) && (!ept_violation.ept_readable || !ept_violation.ept_writeable))
 			{
-				ept::swap_pml1_and_invalidate_tlb(*vcpu->ept_state, hooked_entry->entry_address, hooked_entry->original_entry, invept_type::INVEPT_SINGLE_CONTEXT);
+				const auto old_cr3 = hv::swap_context();
+				const auto rip_physical_address = MmGetPhysicalAddress((PVOID)vcpu->vmexit_info.guest_rip).QuadPart;
+				hv::restore_context(old_cr3);
+				if (static_cast<unsigned __int64>(GET_PFN(rip_physical_address)) == hooked_entry->pfn_of_hooked_page)
+				{
+					hv::set_mtf(true);
+					hooked_entry->original_entry.execute = true;
+					vcpu->ept_state->page_to_change = hooked_entry;
+					ept::swap_pml1_and_invalidate_tlb(*vcpu->ept_state, hooked_entry->entry_address, hooked_entry->original_entry, invept_type::INVEPT_SINGLE_CONTEXT);
+				}
+				else
+				{
+					ept::swap_pml1_and_invalidate_tlb(*vcpu->ept_state, hooked_entry->entry_address, hooked_entry->original_entry, invept_type::INVEPT_SINGLE_CONTEXT);
+				}
 			}
 
 			else if (ept_violation.execute_access && (ept_violation.ept_readable || ept_violation.ept_writeable))

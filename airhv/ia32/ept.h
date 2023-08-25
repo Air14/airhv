@@ -189,12 +189,12 @@ struct __ept_hooked_page_info
 	LIST_ENTRY hooked_functions_list;
 
 	//
-	// The base address of the page. Used to find this structure in the list of page hooks
+	// Page frame number of the hooked page. Used to find this structure in the list of page hooks
 	//
 	unsigned __int64 pfn_of_hooked_page;
 
 	//
-	// The base address of the page with fake contents. Used to swap page with fake contents
+	// Page frame number of the page with fake contents. Used to swap page with fake contents
 	//
 	unsigned __int64 pfn_of_fake_page_contents;
 
@@ -319,6 +319,7 @@ struct __ept_state
 	LIST_ENTRY hooked_page_list;
 	__eptp* ept_pointer;
 	__vmm_ept_page_table* ept_page_table;
+	__ept_hooked_page_info* page_to_change;
 };
 
 namespace ept
