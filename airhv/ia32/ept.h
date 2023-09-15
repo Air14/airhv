@@ -176,7 +176,7 @@ struct __ept_hooked_page_info
 	//
 	// Page with our hooked functions
 	//
-	DECLSPEC_ALIGN(PAGE_SIZE) unsigned __int8 fake_page_contents[PAGE_SIZE];
+	unsigned __int8* fake_page_contents;
 
 	//
 	// Linked list entires for each page hook.

@@ -643,11 +643,20 @@ namespace ept
 			return false;
 		}
 
+		hooked_page_info->fake_page_contents = pool_manager::request_pool<unsigned __int8*>(pool_manager::INTENTION_FAKE_PAGE_CONTENTS, true, PAGE_SIZE);
+		if (hooked_page_info->fake_page_contents == nullptr)
+		{
+			pool_manager::release_pool(hooked_page_info);
+			LogError("There is no preallocated pool for fake page contents");
+			return false;
+		}
+
 		InitializeListHead(&hooked_page_info->hooked_functions_list);
 
 		__ept_hooked_function_info* hooked_function_info = pool_manager::request_pool<__ept_hooked_function_info*>(pool_manager::INTENTION_TRACK_HOOKED_FUNCTIONS, true, sizeof(__ept_hooked_function_info));
 		if (hooked_function_info == nullptr)
 		{
+			pool_manager::release_pool(hooked_page_info->fake_page_contents);
 			pool_manager::release_pool(hooked_page_info);
 			LogError("There is no preallocated pool for hooked function info");
 			return false;
@@ -656,6 +665,7 @@ namespace ept
 		hooked_function_info->trampoline_address = pool_manager::request_pool<unsigned __int8*>(pool_manager::INTENTION_EXEC_TRAMPOLINE, TRUE, 100);
 		if (hooked_function_info->trampoline_address == nullptr)
 		{
+			pool_manager::release_pool(hooked_page_info->fake_page_contents);
 			pool_manager::release_pool(hooked_page_info);
 			pool_manager::release_pool(hooked_function_info);
 			LogError("There is no pre-allocated pool for trampoline");
@@ -679,7 +689,7 @@ namespace ept
 
 		hooked_page_info->changed_entry.physical_address = hooked_page_info->pfn_of_fake_page_contents;
 		
-		RtlCopyMemory(&hooked_page_info->fake_page_contents, PAGE_ALIGN(original_function), PAGE_SIZE);
+		RtlCopyMemory(hooked_page_info->fake_page_contents, PAGE_ALIGN(original_function), PAGE_SIZE);
 
 		hooked_function_info->original_function_va = original_function;
 
@@ -692,6 +702,7 @@ namespace ept
 			if (hooked_function_info->trampoline_address != nullptr)
 				pool_manager::release_pool(hooked_function_info->trampoline_address);
 			pool_manager::release_pool(hooked_function_info);
+			pool_manager::release_pool(hooked_page_info->fake_page_contents);
 			pool_manager::release_pool(hooked_page_info);
 			LogError("Hook failed");
 			return false;

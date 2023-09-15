@@ -9,7 +9,8 @@ namespace pool_manager
         INTENTION_TRACK_HOOKED_PAGES,
         INTENTION_EXEC_TRAMPOLINE,
         INTENTION_SPLIT_PML2,
-        INTENTION_TRACK_HOOKED_FUNCTIONS
+        INTENTION_TRACK_HOOKED_FUNCTIONS,
+        INTENTION_FAKE_PAGE_CONTENTS,
     };
 
     struct __request_new_allocation

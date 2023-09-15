@@ -27,7 +27,15 @@ namespace pool_manager
             }
             RtlSecureZeroMemory(single_pool, sizeof(__pool_table));
 
-            single_pool->address = ::allocate_pool<void*>(size);
+            if (size % PAGE_SIZE == 0)
+            {
+                single_pool->address = ::allocate_contignous_memory<void*>(size);
+            }
+            else
+            {
+                single_pool->address = ::allocate_pool<void*>(size);
+            }
+
             if (single_pool->address == nullptr)
             {
                 LogError("Memory allocation failed");
@@ -171,6 +179,12 @@ namespace pool_manager
             return false;
         }
 
+        if (request_allocation(PAGE_SIZE, g_vmm_context->processor_count * 50, INTENTION_FAKE_PAGE_CONTENTS) == false)
+        {
+            LogError("Pool mangaer request allocation Failed");
+            return false;
+        }
+
         return perform_allocation();
     }
     /// <summary>
@@ -190,7 +204,14 @@ namespace pool_manager
                 current = current->Flink;
 
                 // Free the alloocated buffer
-                free_pool(pool_table->address);
+                if (pool_table->size % PAGE_SIZE == 0)
+                {
+                    free_contignous_memory(pool_table->address);
+                }
+                else
+                {
+                    free_pool(pool_table->address);
+                }
 
                 // Free the record itself
                 free_pool(pool_table);
