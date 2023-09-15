@@ -351,7 +351,7 @@ void adjust_control_registers()
 /// <param name="guest_rsp"></param>
 void init_logical_processor(void* guest_rsp)
 {
-	unsigned __int64 processor_number = KeGetCurrentProcessorNumber();
+	unsigned __int64 processor_number = KeGetCurrentProcessorNumberEx(NULL);
 
 	__vcpu* vcpu = g_vmm_context->vcpu_table[processor_number];
 

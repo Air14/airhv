@@ -832,7 +832,7 @@ void fill_vmcs(__vcpu* vcpu, void* guest_rsp)
 	}
 
 	if(secondary_controls.enable_vpid == true)
-		hv::vmwrite<unsigned __int64>(CONTROL_VIRTUAL_PROCESSOR_IDENTIFIER, KeGetCurrentProcessorNumber() + 1);
+		hv::vmwrite<unsigned __int64>(CONTROL_VIRTUAL_PROCESSOR_IDENTIFIER, KeGetCurrentProcessorNumberEx(NULL) + 1);
 
 	if(secondary_controls.enable_ept == true && secondary_controls.enable_vpid == true)
 		hv::vmwrite<unsigned __int64>(CONTROL_EPT_POINTER, vcpu->ept_state->ept_pointer->all);

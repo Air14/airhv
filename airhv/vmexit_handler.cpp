@@ -1231,7 +1231,7 @@ void vmexit_rdtsc_handler(__vcpu* vcpu)
 /// <returns></returns>
 unsigned __int64 return_rsp_for_vmxoff()
 {
-	return g_vmm_context->vcpu_table[KeGetCurrentProcessorNumber()]->vmx_off_state.guest_rsp;
+	return g_vmm_context->vcpu_table[KeGetCurrentProcessorNumberEx(NULL)]->vmx_off_state.guest_rsp;
 }
 
 /// <summary>
@@ -1240,7 +1240,7 @@ unsigned __int64 return_rsp_for_vmxoff()
 /// <returns></returns>
 unsigned __int64 return_rip_for_vmxoff()
 {
-	return g_vmm_context->vcpu_table[KeGetCurrentProcessorNumber()]->vmx_off_state.guest_rip;
+	return g_vmm_context->vcpu_table[KeGetCurrentProcessorNumberEx(NULL)]->vmx_off_state.guest_rip;
 }
 
 void vmexit_cr_handler(__vcpu* vcpu)
@@ -1471,7 +1471,7 @@ void vmexit_cr_handler(__vcpu* vcpu)
 /// <returns> status </returns>
 bool vmexit_handler(__vmexit_guest_registers* guest_registers)
 {
-	__vcpu* vcpu = g_vmm_context->vcpu_table[KeGetCurrentProcessorNumber()];
+	__vcpu* vcpu = g_vmm_context->vcpu_table[KeGetCurrentProcessorNumberEx(NULL)];
 
 	guest_registers->rsp = hv::vmread(GUEST_RSP);
 
