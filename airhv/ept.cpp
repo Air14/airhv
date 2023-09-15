@@ -775,6 +775,7 @@ namespace ept
 							swap_pml1_and_invalidate_tlb(ept_state, hooked_page_info->entry_address, hooked_page_info->original_entry, INVEPT_SINGLE_CONTEXT);
 
 							RemoveEntryList(current_hooked_page);
+							pool_manager::release_pool(hooked_page_info->fake_page_contents);
 							pool_manager::release_pool(hooked_page_info);
 							return true;
 						}
@@ -824,6 +825,7 @@ namespace ept
 
 			current_hooked_page = current_hooked_page->Flink;
 
+			pool_manager::release_pool(hooked_entry->fake_page_contents);
 			pool_manager::release_pool(hooked_entry);
 		}
 	}
