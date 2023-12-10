@@ -8,6 +8,7 @@
 #include "ia32\vmcs_encodings.h"
 #include "ia32\msr.h"
 #include "ia32\cr.h"
+#include "ia32\cpuid.h"
 #include "vmexit_handler.h"
 #include "hypervisor_routines.h"
 #include "interrupt.h"
@@ -56,9 +57,20 @@ void vmexit_vmcall_handler(__vcpu* vcpu)
 	//
 	// Check if this vmcall belongs to us
 	//
+	__cpuid_info cpuid_reg{};
+	__cpuid(reinterpret_cast<int*>(&cpuid_reg), 0x40000001);
+	if (cpuid_reg.eax == 'Hv#1' && vcpu->vmexit_info.guest_registers->rax != VMCALL_IDENTIFIER)
+	{
+		vcpu->vmexit_info.guest_registers->rax = __hyperv_vm_call(vcpu->vmexit_info.guest_registers->rcx,
+			vcpu->vmexit_info.guest_registers->rdx, vcpu->vmexit_info.guest_registers->r8);
+
+		adjust_rip(vcpu);
+		return;
+	}
+
 	if (vcpu->vmexit_info.guest_registers->rax != VMCALL_IDENTIFIER)
 	{
-		vcpu->vmexit_info.guest_registers->rax = __hyperv_vm_call(vcpu->vmexit_info.guest_registers->rcx, vcpu->vmexit_info.guest_registers->rdx, vcpu->vmexit_info.guest_registers->r8);
+		adjust_rip(vcpu);
 		return;
 	}
 
@@ -140,6 +152,12 @@ void vmexit_vmcall_handler(__vcpu* vcpu)
 		case VMCALL_UNHIDE_HV_PRESENCE:
 		{
 			g_vmm_context->hv_presence = true;
+			adjust_rip(vcpu);
+			break;
+		}
+
+		default:
+		{
 			adjust_rip(vcpu);
 			break;
 		}
